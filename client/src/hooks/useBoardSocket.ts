@@ -37,6 +37,7 @@ export function useBoardSocket(boardId: string | null) {
         (res: { snapshot?: BoardSnapshot; you?: PresenceUser; error?: string }) => {
           if (res?.error) {
             console.warn('join error', res.error);
+            useBoardStore.setState({ board: null, columns: [], cards: [], presence: [], cursors: {} });
             return;
           }
           if (res.snapshot) setSnapshot(res.snapshot);

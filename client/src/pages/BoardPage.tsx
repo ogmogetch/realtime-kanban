@@ -5,6 +5,7 @@ import { useBoardSocket } from '../hooks/useBoardSocket.js';
 import BoardView from '../components/BoardView.js';
 import PresenceBar from '../components/PresenceBar.js';
 import RemoteCursors from '../components/RemoteCursors.js';
+import NameEditor from '../components/NameEditor.js';
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
@@ -27,7 +28,10 @@ export default function BoardPage() {
           <span className={`status-dot ${connected ? 'on' : ''}`} />
           <strong>{board?.title ?? boardId}</strong>
         </div>
-        <PresenceBar />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <NameEditor />
+          <PresenceBar />
+        </div>
       </div>
       {reconnecting && <div className="banner">Connection lost — reconnecting…</div>}
       <BoardView />
