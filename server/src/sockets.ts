@@ -11,9 +11,13 @@ import {
   createLabel,
   deleteLabel,
   toggleCardLabel,
+  toggleCardAssignee,
   boardIdForColumn,
   boardIdForCard,
   isBoardMember,
+  logCardEvent,
+  listCardEvents,
+  getBoard,
 } from './store.js';
 import { verifyToken } from './auth.js';
 import type { CardMovePayload, PresenceUser } from './types.js';
@@ -51,6 +55,11 @@ interface AuthedSocket extends Socket {
     boardId?: string;
     user?: PresenceUser;
   };
+}
+
+async function broadcastEvents(io: Server, boardId: string, cardId: string) {
+  const events = await listCardEvents(cardId, 20);
+  io.to(boardId).emit('card:events', { cardId, events });
 }
 
 export function registerSocketHandlers(io: Server) {
@@ -104,6 +113,13 @@ export function registerSocketHandlers(io: Server) {
       }
       const result = await moveCard(payload.cardId, payload.toColumnId, payload.toIndex);
       if (!result) return ack?.({ error: 'card or column missing' });
+      if (result.fromColumnId !== result.toColumnId) {
+        await logCardEvent(payload.cardId, boardId, socket.data.userId, 'card.moved', {
+          fromColumnId: result.fromColumnId,
+          toColumnId: result.toColumnId,
+        });
+        await broadcastEvents(io, boardId, payload.cardId);
+      }
       const snap = await getSnapshot(boardId);
       io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true });
@@ -117,6 +133,7 @@ export function registerSocketHandlers(io: Server) {
       if (!trimmed) return ack?.({ error: 'title required' });
       const card = await createCard(columnId, trimmed);
       if (!card) return ack?.({ error: 'column missing' });
+      await logCardEvent(card.id, boardId, socket.data.userId, 'card.created', { title: card.title });
       const snap = await getSnapshot(boardId);
       io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true, card });
@@ -141,9 +158,41 @@ export function registerSocketHandlers(io: Server) {
       if (typeof description === 'string') patch.description = description.slice(0, 2000);
       const card = await updateCard(cardId, patch);
       if (!card) return ack?.({ error: 'no update' });
+      if (patch.title !== undefined) {
+        await logCardEvent(cardId, boardId, socket.data.userId, 'card.renamed', { title: patch.title });
+      }
+      if (patch.description !== undefined) {
+        await logCardEvent(cardId, boardId, socket.data.userId, 'card.description_changed', {});
+      }
+      await broadcastEvents(io, boardId, cardId);
       const snap = await getSnapshot(boardId);
       io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true, card });
+    });
+
+    socket.on('card:events:list', async ({ cardId }: { cardId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const events = await listCardEvents(cardId, 50);
+      ack?.({ ok: true, events });
+    });
+
+    socket.on('card:assignee:toggle', async ({ cardId, userId }: { cardId: string; userId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const result = await toggleCardAssignee(cardId, userId);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'user not a member of this board' });
+      await logCardEvent(
+        cardId, boardId, socket.data.userId,
+        result.attached ? 'card.assigned' : 'card.unassigned',
+        { userId, username: result.username }
+      );
+      await broadcastEvents(io, boardId, cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true, attached: result.attached });
     });
 
     socket.on('column:create', async ({ title }: { title: string }, ack?: Function) => {
@@ -212,9 +261,24 @@ export function registerSocketHandlers(io: Server) {
       if (!boardId) return ack?.({ error: 'not in board' });
       const result = await toggleCardLabel(cardId, labelId);
       if (!result || result.boardId !== boardId) return ack?.({ error: 'forbidden' });
+      await logCardEvent(
+        cardId, boardId, socket.data.userId,
+        result.attached ? 'card.label_added' : 'card.label_removed',
+        { labelId, labelName: result.labelName }
+      );
+      await broadcastEvents(io, boardId, cardId);
       const snap = await getSnapshot(boardId);
       io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true, attached: result.attached });
+    });
+
+    socket.on('board:refresh', async (_payload: unknown, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      const board = await getBoard(boardId);
+      if (!board) return ack?.({ error: 'not found' });
+      io.to(boardId).emit('board:meta', board);
+      ack?.({ ok: true, board });
     });
 
     socket.on('cursor:move', ({ x, y }: { x: number; y: number }) => {

@@ -8,6 +8,7 @@ import {
   signInviteToken,
   verifyInviteToken,
   getUserById,
+  updateUserProfile,
   type AuthenticatedRequest,
 } from './auth.js';
 import {
@@ -18,7 +19,9 @@ import {
   isBoardMember,
   deleteBoard,
   joinBoardViaInvite,
+  updateBoardBackground,
 } from './store.js';
+import { query } from './db.js';
 import { config } from './config.js';
 
 export const rest = Router();
@@ -72,6 +75,20 @@ rest.get('/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Respons
   res.json({ user });
 });
 
+const profileSchema = z.object({
+  displayName: z.string().min(0).max(40).nullable().optional(),
+  avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  background: z.string().max(200).nullable().optional(),
+});
+
+rest.patch('/auth/me', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = profileSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid input' });
+  const user = await updateUserProfile(req.auth!.userId, parsed.data);
+  if (!user) return res.status(404).json({ error: 'not found' });
+  res.json({ user });
+});
+
 // ---------- Boards ----------
 
 rest.get('/boards', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -104,11 +121,34 @@ rest.get('/boards/:id/snapshot', requireAuth, async (req: AuthenticatedRequest, 
   res.json(snap);
 });
 
+const boardPatchSchema = z.object({
+  background: z.string().max(200).nullable().optional(),
+  visibility: z.enum(['private', 'link']).optional(),
+});
+
+rest.patch('/boards/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = boardPatchSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid input' });
+  const board = await getBoard(req.params.id);
+  if (!board) return res.status(404).json({ error: 'not found' });
+  if (board.ownerId !== req.auth!.userId) return res.status(403).json({ error: 'owner only' });
+  if (parsed.data.background !== undefined) {
+    await updateBoardBackground(board.id, req.auth!.userId, parsed.data.background);
+  }
+  if (parsed.data.visibility !== undefined) {
+    await query(`UPDATE boards SET visibility = $1 WHERE id = $2`, [parsed.data.visibility, board.id]);
+  }
+  const updated = await getBoard(board.id);
+  res.json(updated);
+});
+
 rest.delete('/boards/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const ok = await deleteBoard(req.params.id, req.auth!.userId);
   if (!ok) return res.status(403).json({ error: 'forbidden or not found' });
   res.json({ ok: true });
 });
+
+// ---------- Invites ----------
 
 rest.post('/boards/:id/invite-link', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const board = await getBoard(req.params.id);
@@ -129,4 +169,23 @@ rest.post('/invites/accept', requireAuth, async (req: AuthenticatedRequest, res:
   const member = await joinBoardViaInvite(payload.boardId, req.auth!.userId);
   if (!member) return res.status(404).json({ error: 'board not found' });
   res.json({ boardId: payload.boardId, member });
+});
+
+// ---------- Public read-only view ----------
+
+rest.get('/public/boards/:token/snapshot', async (req, res) => {
+  const payload = verifyInviteToken(req.params.token);
+  if (!payload) return res.status(400).json({ error: 'invalid invite' });
+  const board = await getBoard(payload.boardId);
+  if (!board) return res.status(404).json({ error: 'not found' });
+  const { rows } = await query<{ visibility: string }>(
+    `SELECT visibility FROM boards WHERE id = $1`,
+    [board.id]
+  );
+  if (rows[0]?.visibility !== 'link') {
+    return res.status(403).json({ error: 'board is private' });
+  }
+  const snap = await getSnapshot(board.id);
+  if (!snap) return res.status(404).json({ error: 'not found' });
+  res.json(snap);
 });
