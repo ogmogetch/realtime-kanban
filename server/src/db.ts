@@ -103,7 +103,13 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
     `,
   },
   {
-    name: '008_visibility_public',
+    name: '008_ensure_visibility_column',
+    sql: `
+      ALTER TABLE boards ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'private';
+    `,
+  },
+  {
+    name: '009_visibility_public',
     sql: `
       UPDATE boards SET visibility = 'public' WHERE visibility = 'link';
     `,
