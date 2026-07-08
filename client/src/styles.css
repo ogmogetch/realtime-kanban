@@ -1284,22 +1284,78 @@ kbd {
 .filter-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   margin: 4px 20px 12px;
-  padding: 10px 12px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--border);
+  padding: 12px 14px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.7));
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
 }
+.filter-bar > .muted.small {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.7;
+  padding: 2px 4px;
+}
+
+/* label filter chips */
 .filter-bar .label-pill {
   cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.55;
+  filter: saturate(0.7);
+  padding: 4px 12px;
+  font-size: 12px;
+  transform: translateY(0);
+  transition: transform var(--t-fast), opacity var(--t-fast), box-shadow var(--t-fast), filter var(--t-fast);
+  position: relative;
 }
-.filter-bar .label-pill.active { opacity: 1; box-shadow: 0 0 0 2px rgba(255,255,255,0.35); }
-.filter-bar .filter-avatars { display: flex; gap: 4px; }
-.filter-bar .filter-avatars .avatar { cursor: pointer; opacity: 0.45; margin-left: -4px; }
-.filter-bar .filter-avatars .avatar.active { opacity: 1; box-shadow: 0 0 0 2px var(--accent); }
+.filter-bar .label-pill:hover {
+  opacity: 0.9;
+  filter: saturate(1);
+  transform: translateY(-1px);
+}
+.filter-bar .label-pill.active {
+  opacity: 1;
+  filter: saturate(1.1);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+.filter-bar .label-pill.active::after {
+  content: '✓';
+  margin-left: 6px;
+  font-weight: 800;
+}
+
+/* assignee filter avatars */
+.filter-bar .filter-avatars {
+  display: flex;
+  gap: 2px;
+  padding-left: 6px;
+}
+.filter-bar .filter-avatars .avatar {
+  cursor: pointer;
+  opacity: 0.4;
+  filter: grayscale(0.6);
+  margin-left: -6px;
+  transition: transform var(--t-fast), opacity var(--t-fast), filter var(--t-fast), box-shadow var(--t-fast);
+}
+.filter-bar .filter-avatars .avatar:hover {
+  opacity: 0.85;
+  filter: grayscale(0);
+  transform: translateY(-2px) scale(1.08);
+  z-index: 2;
+}
+.filter-bar .filter-avatars .avatar.active {
+  opacity: 1;
+  filter: grayscale(0);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent);
+  transform: translateY(-2px) scale(1.08);
+  z-index: 2;
+}
 
 /* ---------- Settings page ---------- */
 
