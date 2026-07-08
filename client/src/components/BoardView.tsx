@@ -25,8 +25,31 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
   const columns = useBoardStore((s) => s.columns);
   const cards = useBoardStore((s) => s.cards);
   const labels = useBoardStore((s) => s.labels);
+  const members = useBoardStore((s) => s.members);
   const applyOptimisticMove = useBoardStore((s) => s.applyOptimisticMove);
   const applyOptimisticColumnMove = useBoardStore((s) => s.applyOptimisticColumnMove);
+
+  const [search, setSearch] = useState('');
+  const [labelFilter, setLabelFilter] = useState<Set<string>>(new Set());
+  const [assigneeFilter, setAssigneeFilter] = useState<Set<string>>(new Set());
+
+  function toggleSet<T>(prev: Set<T>, v: T): Set<T> {
+    const next = new Set(prev);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
+    return next;
+  }
+  const filterActive = search.trim() !== '' || labelFilter.size > 0 || assigneeFilter.size > 0;
+  const filteredCards = useMemo(() => {
+    if (!filterActive) return cards;
+    const q = search.trim().toLowerCase();
+    return cards.filter((c) => {
+      if (q && !c.title.toLowerCase().includes(q) && !c.description.toLowerCase().includes(q)) return false;
+      if (labelFilter.size > 0 && !c.labelIds.some((id) => labelFilter.has(id))) return false;
+      if (assigneeFilter.size > 0 && !c.assigneeIds.some((id) => assigneeFilter.has(id))) return false;
+      return true;
+    });
+  }, [cards, search, labelFilter, assigneeFilter, filterActive]);
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [activeColumn, setActiveColumn] = useState<Column | null>(null);
@@ -40,13 +63,13 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
   const cardsByColumn = useMemo(() => {
     const map = new Map<string, Card[]>();
     for (const c of columns) map.set(c.id, []);
-    for (const card of cards) {
+    for (const card of filteredCards) {
       const list = map.get(card.columnId);
       if (list) list.push(card);
     }
     for (const [, list] of map) list.sort((a, b) => a.order - b.order);
     return map;
-  }, [columns, cards]);
+  }, [columns, filteredCards]);
 
   const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
 
@@ -141,6 +164,55 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
 
   return (
     <>
+      <div className="filter-bar">
+        <div className="search-bar" style={{ minWidth: 200 }}>
+          <span className="icon-search">🔍</span>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search cards…"
+          />
+        </div>
+        {labels.length > 0 && (
+          <>
+            <span className="muted small">Labels:</span>
+            {labels.map((l) => (
+              <span
+                key={l.id}
+                className={`label-pill ${labelFilter.has(l.id) ? 'active' : ''}`}
+                style={{ background: l.color }}
+                onClick={() => setLabelFilter((p) => toggleSet(p, l.id))}
+              >
+                {l.name}
+              </span>
+            ))}
+          </>
+        )}
+        {members.length > 0 && (
+          <>
+            <span className="muted small" style={{ marginLeft: 8 }}>Assignee:</span>
+            <div className="filter-avatars">
+              {members.map((m) => (
+                <span
+                  key={m.userId}
+                  className={`avatar small ${assigneeFilter.has(m.userId) ? 'active' : ''}`}
+                  style={{ background: m.avatarColor }}
+                  title={m.displayName || m.username}
+                  onClick={() => setAssigneeFilter((p) => toggleSet(p, m.userId))}
+                >
+                  {(m.displayName || m.username).slice(0, 2).toUpperCase()}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+        {filterActive && (
+          <button className="ghost small" onClick={() => { setSearch(''); setLabelFilter(new Set()); setAssigneeFilter(new Set()); }}>
+            Clear
+          </button>
+        )}
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
