@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useBoardStore } from '../store.js';
 import { useAuthStore } from '../authStore.js';
 import { api } from '../api.js';
+import BoardSettings from './BoardSettings.js';
 
 export default function BoardHeader() {
   const board = useBoardStore((s) => s.board);
@@ -21,8 +22,11 @@ export default function BoardHeader() {
     setBusy(true);
     setErr(null);
     try {
-      const { url } = await api.createInviteLink(board.id);
-      setLink(url);
+      const { token, url } = await api.createInviteLink(board.id);
+      const finalUrl = board.visibility === 'link'
+        ? `${window.location.origin}/view/${token}`
+        : url;
+      setLink(finalUrl);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -56,6 +60,7 @@ export default function BoardHeader() {
       <span className="muted small">
         {members.length} member{members.length > 1 ? 's' : ''}
       </span>
+      <BoardSettings />
       {isOwner && (
         <>
           <button className="ghost small" onClick={toggle}>
@@ -63,7 +68,11 @@ export default function BoardHeader() {
           </button>
           {showInvite && (
             <div className="invite-popover">
-              <div className="muted small">Anyone with this link can join the board.</div>
+              <div className="muted small">
+                {board.visibility === 'link'
+                  ? 'Anyone with this link can view the board (read-only unless they join).'
+                  : 'Anyone with this link can join the board as a member.'}
+              </div>
               {busy && !link && <div className="muted small">Generating…</div>}
               {link && (
                 <>

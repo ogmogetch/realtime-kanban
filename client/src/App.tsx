@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage.js';
 import RegisterPage from './pages/RegisterPage.js';
 import JoinPage from './pages/JoinPage.js';
 import SettingsPage from './pages/SettingsPage.js';
+import ViewPage from './pages/ViewPage.js';
 import { useAuthStore } from './authStore.js';
 import { api } from './api.js';
 import { disconnectSocket } from './socket.js';
@@ -58,6 +59,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/join/:token" element={<JoinPage />} />
+      <Route path="/view/:token" element={<ViewPage />} />
       <Route
         path="/"
         element={

@@ -30,6 +30,7 @@ export interface Board {
   ownerId: string;
   createdAt: string;
   background: string | null;
+  visibility: 'private' | 'link';
 }
 
 export interface Label {

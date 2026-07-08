@@ -20,20 +20,21 @@ const DEFAULT_LABELS: Array<{ name: string; color: string }> = [
   { name: 'Idea', color: '#8b5cf6' },
 ];
 
-function boardRowToBoard(r: { id: string; title: string; owner_id: string; created_at: Date; background: string | null }): Board {
+function boardRowToBoard(r: { id: string; title: string; owner_id: string; created_at: Date; background: string | null; visibility: string }): Board {
   return {
     id: r.id,
     title: r.title,
     ownerId: r.owner_id,
     createdAt: r.created_at.toISOString(),
     background: r.background,
+    visibility: r.visibility === 'link' ? 'link' : 'private',
   };
 }
 
 export async function createBoard(ownerId: string, title: string): Promise<Board> {
   return tx(async (c) => {
     const id = nanoid(10);
-    const boardRes = await c.query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null }>(
+    const boardRes = await c.query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null; visibility: string }>(
       `INSERT INTO boards (id, title, owner_id) VALUES ($1, $2, $3) RETURNING *`,
       [id, title, ownerId]
     );
@@ -58,7 +59,7 @@ export async function createBoard(ownerId: string, title: string): Promise<Board
 }
 
 export async function listBoardsForUser(userId: string): Promise<Board[]> {
-  const { rows } = await query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null }>(
+  const { rows } = await query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null; visibility: string }>(
     `SELECT b.* FROM boards b
      JOIN board_members m ON m.board_id = b.id
      WHERE m.user_id = $1
@@ -69,7 +70,7 @@ export async function listBoardsForUser(userId: string): Promise<Board[]> {
 }
 
 export async function getBoard(boardId: string): Promise<Board | null> {
-  const { rows } = await query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null }>(
+  const { rows } = await query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null; visibility: string }>(
     `SELECT * FROM boards WHERE id = $1`,
     [boardId]
   );
@@ -112,7 +113,7 @@ export async function joinBoardViaInvite(boardId: string, userId: string): Promi
 }
 
 export async function updateBoardBackground(boardId: string, ownerId: string, background: string | null): Promise<Board | null> {
-  const { rows } = await query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null }>(
+  const { rows } = await query<{ id: string; title: string; owner_id: string; created_at: Date; background: string | null; visibility: string }>(
     `UPDATE boards SET background = $1 WHERE id = $2 AND owner_id = $3 RETURNING *`,
     [background, boardId, ownerId]
   );
