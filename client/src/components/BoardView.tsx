@@ -20,6 +20,7 @@ import ColumnView from './ColumnView.js';
 import CardView from './CardView.js';
 import CardModal from './CardModal.js';
 import ShortcutsOverlay from './ShortcutsOverlay.js';
+import LabelFilterDropdown from './LabelFilterDropdown.js';
 import type { Card, Column } from '../types.js';
 
 export default function BoardView({ readOnly = false }: { readOnly?: boolean }) {
@@ -218,16 +219,25 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
         {labels.length > 0 && (
           <>
             <span className="muted small">Labels:</span>
-            {labels.map((l) => (
-              <span
-                key={l.id}
-                className={`label-pill ${labelFilter.has(l.id) ? 'active' : ''}`}
-                style={{ background: l.color }}
-                onClick={() => setLabelFilter((p) => toggleSet(p, l.id))}
-              >
-                {l.name}
-              </span>
-            ))}
+            {labels.length > 10 ? (
+              <LabelFilterDropdown
+                labels={labels}
+                active={labelFilter}
+                onToggle={(id) => setLabelFilter((p) => toggleSet(p, id))}
+                onClear={() => setLabelFilter(new Set())}
+              />
+            ) : (
+              labels.map((l) => (
+                <span
+                  key={l.id}
+                  className={`label-pill ${labelFilter.has(l.id) ? 'active' : ''}`}
+                  style={{ background: l.color }}
+                  onClick={() => setLabelFilter((p) => toggleSet(p, l.id))}
+                >
+                  {l.name}
+                </span>
+              ))
+            )}
           </>
         )}
         {members.length > 0 && (
