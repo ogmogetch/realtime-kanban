@@ -5,13 +5,15 @@ import { useBoardSocket } from '../hooks/useBoardSocket.js';
 import BoardView from '../components/BoardView.js';
 import PresenceBar from '../components/PresenceBar.js';
 import RemoteCursors from '../components/RemoteCursors.js';
-import NameEditor from '../components/NameEditor.js';
+import BoardHeader from '../components/BoardHeader.js';
+import { boardGradient } from '../utils/boardColor.js';
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
   const board = useBoardStore((s) => s.board);
   const connected = useBoardStore((s) => s.connected);
   const reconnecting = useBoardStore((s) => s.reconnecting);
+  const boardError = useBoardStore((s) => s.boardError);
   const reset = useBoardStore((s) => s.reset);
 
   useBoardSocket(boardId ?? null);
@@ -20,21 +22,30 @@ export default function BoardPage() {
     return () => reset();
   }, [boardId, reset]);
 
+  const gradient = boardId ? boardGradient(boardId) : undefined;
+
   return (
-    <div className="board-page">
+    <div
+      className="board-page"
+      data-hue
+      style={{ ['--board-bg' as string]: gradient }}
+    >
       <div className="header">
-        <div>
-          <Link to="/" style={{ marginRight: 12 }}>← Boards</Link>
-          <span className={`status-dot ${connected ? 'on' : ''}`} />
+        <div className="header-left">
+          <Link to="/" className="back-link">← Boards</Link>
+          <span className={`status-dot ${connected ? 'on' : ''}`} title={connected ? 'Connected' : 'Disconnected'} />
           <strong>{board?.title ?? boardId}</strong>
+          {board && <BoardHeader />}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <NameEditor />
-          <PresenceBar />
-        </div>
+        <PresenceBar />
       </div>
       {reconnecting && <div className="banner">Connection lost — reconnecting…</div>}
-      <BoardView />
+      {boardError && (
+        <div className="banner err">
+          {boardError} — <Link to="/">back to boards</Link>
+        </div>
+      )}
+      {board && <BoardView />}
       <RemoteCursors />
     </div>
   );

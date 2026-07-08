@@ -12,17 +12,21 @@ import {
 import { useBoardStore } from '../store.js';
 import { getSocket } from '../socket.js';
 import ColumnView from './ColumnView.js';
+import CardView from './CardView.js';
+import CardModal from './CardModal.js';
 import type { Card } from '../types.js';
 
 export default function BoardView() {
   const columns = useBoardStore((s) => s.columns);
   const cards = useBoardStore((s) => s.cards);
+  const labels = useBoardStore((s) => s.labels);
   const applyOptimisticMove = useBoardStore((s) => s.applyOptimisticMove);
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
   const cardsByColumn = useMemo(() => {
@@ -95,52 +99,59 @@ export default function BoardView() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragCancel={() => setActiveCard(null)}
-    >
-      <div className="board">
-        {columns.map((col) => (
-          <ColumnView
-            key={col.id}
-            column={col}
-            cards={cardsByColumn.get(col.id) ?? []}
-          />
-        ))}
-        <div className="column add-column-wrapper" onClick={() => setAdding((v) => !v)}>
-          {adding ? (
-            <div className="inline-form" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="text"
-                autoFocus
-                value={newColTitle}
-                onChange={(e) => setNewColTitle(e.target.value)}
-                placeholder="Column title"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') addColumn();
-                  if (e.key === 'Escape') { setAdding(false); setNewColTitle(''); }
-                }}
-              />
-              <button className="primary" onClick={addColumn}>Add</button>
-            </div>
-          ) : (
-            <div>+ Add column</div>
-          )}
-        </div>
-      </div>
-
-      <DragOverlay>
-        {activeCard ? (
-          <div className="card" style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
-            <div className="row">
-              <span>{activeCard.title}</span>
-            </div>
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setActiveCard(null)}
+      >
+        <div className="board">
+          {columns.map((col) => (
+            <ColumnView
+              key={col.id}
+              column={col}
+              cards={cardsByColumn.get(col.id) ?? []}
+              labels={labels}
+              onOpenCard={setOpenCardId}
+            />
+          ))}
+          <div className="column add-column-wrapper" onClick={() => setAdding((v) => !v)}>
+            {adding ? (
+              <div className="inline-form vertical" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="text"
+                  autoFocus
+                  value={newColTitle}
+                  onChange={(e) => setNewColTitle(e.target.value)}
+                  placeholder="Column title"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addColumn();
+                    if (e.key === 'Escape') { setAdding(false); setNewColTitle(''); }
+                  }}
+                />
+                <div className="row">
+                  <button className="primary" onClick={addColumn}>Add</button>
+                  <button className="ghost" onClick={(e) => { e.stopPropagation(); setAdding(false); setNewColTitle(''); }}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div>+ Add another list</div>
+            )}
           </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        </div>
+
+        <DragOverlay>
+          {activeCard ? (
+            <div style={{ transform: 'rotate(3deg)' }}>
+              <CardView card={activeCard} labels={labels} onOpen={() => {}} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {openCardId && <CardModal cardId={openCardId} onClose={() => setOpenCardId(null)} />}
+    </>
   );
 }

@@ -1,19 +1,23 @@
 import { create } from 'zustand';
-import type { Board, Card, Column, CursorPos, PresenceUser } from './types.js';
+import type { Board, Card, Column, CursorPos, Label, BoardMember, PresenceUser } from './types.js';
 
 interface BoardState {
   board: Board | null;
   columns: Column[];
   cards: Card[];
+  labels: Label[];
+  members: BoardMember[];
   presence: PresenceUser[];
   cursors: Record<string, CursorPos>;
   me: PresenceUser | null;
   connected: boolean;
   reconnecting: boolean;
+  boardError: string | null;
 
-  setSnapshot: (payload: { board: Board; columns: Column[]; cards: Card[] }) => void;
+  setSnapshot: (payload: { board: Board; columns: Column[]; cards: Card[]; labels: Label[]; members: BoardMember[] }) => void;
   setColumns: (columns: Column[]) => void;
   setCards: (cards: Card[]) => void;
+  setLabels: (labels: Label[]) => void;
   applyOptimisticMove: (cardId: string, toColumnId: string, toIndex: number) => void;
   setPresence: (users: PresenceUser[]) => void;
   setCursor: (c: CursorPos) => void;
@@ -21,6 +25,7 @@ interface BoardState {
   setMe: (u: PresenceUser | null) => void;
   setConnected: (v: boolean) => void;
   setReconnecting: (v: boolean) => void;
+  setBoardError: (v: string | null) => void;
   reset: () => void;
 }
 
@@ -28,20 +33,27 @@ export const useBoardStore = create<BoardState>((set) => ({
   board: null,
   columns: [],
   cards: [],
+  labels: [],
+  members: [],
   presence: [],
   cursors: {},
   me: null,
   connected: false,
   reconnecting: false,
+  boardError: null,
 
-  setSnapshot: ({ board, columns, cards }) =>
+  setSnapshot: ({ board, columns, cards, labels, members }) =>
     set({
       board,
       columns: [...columns].sort((a, b) => a.order - b.order),
       cards: [...cards].sort((a, b) => a.order - b.order),
+      labels,
+      members,
+      boardError: null,
     }),
   setColumns: (columns) => set({ columns: [...columns].sort((a, b) => a.order - b.order) }),
   setCards: (cards) => set({ cards: [...cards].sort((a, b) => a.order - b.order) }),
+  setLabels: (labels) => set({ labels }),
 
   applyOptimisticMove: (cardId, toColumnId, toIndex) =>
     set((state) => {
@@ -84,13 +96,17 @@ export const useBoardStore = create<BoardState>((set) => ({
   setMe: (u) => set({ me: u }),
   setConnected: (v) => set({ connected: v }),
   setReconnecting: (v) => set({ reconnecting: v }),
+  setBoardError: (v) => set({ boardError: v }),
   reset: () =>
     set({
       board: null,
       columns: [],
       cards: [],
+      labels: [],
+      members: [],
       presence: [],
       cursors: {},
       me: null,
+      boardError: null,
     }),
 }));
