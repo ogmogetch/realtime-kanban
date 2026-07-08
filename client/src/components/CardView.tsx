@@ -26,10 +26,15 @@ export default function CardView({ card, labels, onOpen, isDragging }: Props) {
   const descPreview = card.description.trim();
   const linkCount = extractUrls(card.description).length;
 
+  const style: React.CSSProperties = card.color
+    ? { background: card.color, borderLeft: `4px solid ${card.color}`, backgroundImage: `linear-gradient(180deg, ${card.color}22, transparent 40%)` }
+    : {};
+
   return (
     <div
       className={`card ${isDragging ? 'dragging' : ''}`}
       onClick={() => onOpen(card.id)}
+      style={style}
     >
       {cardLabels.length > 0 && (
         <div className="card-labels">

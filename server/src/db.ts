@@ -82,6 +82,12 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS idx_card_events_card ON card_events(card_id, created_at DESC);
     `,
   },
+  {
+    name: '006_card_color',
+    sql: `
+      ALTER TABLE cards ADD COLUMN IF NOT EXISTS color TEXT;
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

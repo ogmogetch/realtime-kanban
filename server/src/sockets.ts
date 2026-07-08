@@ -150,13 +150,14 @@ export function registerSocketHandlers(io: Server) {
       ack?.({ ok: true });
     });
 
-    socket.on('card:update', async ({ cardId, title, description }: { cardId: string; title?: string; description?: string }, ack?: Function) => {
+    socket.on('card:update', async ({ cardId, title, description, color }: { cardId: string; title?: string; description?: string; color?: string | null }, ack?: Function) => {
       const boardId = socket.data.boardId;
       if (!boardId) return ack?.({ error: 'not in board' });
       if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
-      const patch: { title?: string; description?: string } = {};
+      const patch: { title?: string; description?: string; color?: string | null } = {};
       if (typeof title === 'string') patch.title = title.trim().slice(0, 200);
       if (typeof description === 'string') patch.description = description.slice(0, 2000);
+      if (color === null || (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color))) patch.color = color;
       const card = await updateCard(cardId, patch);
       if (!card) return ack?.({ error: 'no update' });
       if (patch.title !== undefined) {
@@ -164,6 +165,9 @@ export function registerSocketHandlers(io: Server) {
       }
       if (patch.description !== undefined) {
         await logCardEvent(cardId, boardId, socket.data.userId, 'card.description_changed', {});
+      }
+      if (patch.color !== undefined) {
+        await logCardEvent(cardId, boardId, socket.data.userId, 'card.color_changed', { color: patch.color });
       }
       await broadcastEvents(io, boardId, cardId);
       const snap = await getSnapshot(boardId);

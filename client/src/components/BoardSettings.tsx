@@ -15,6 +15,8 @@ const BACKGROUNDS: Array<{ name: string; value: string }> = [
   { name: 'Cosmos',        value: 'linear-gradient(135deg, #a855f7, #ec4899)' },
 ];
 
+const SOLID_COLORS = ['#0f172a', '#1e293b', '#334155', '#3b3f5b', '#4c1d95', '#155e75', '#065f46', '#7f1d1d'];
+
 export default function BoardSettings() {
   const board = useBoardStore((s) => s.board);
   const setBoardMeta = useBoardStore((s) => s.setBoardMeta);
@@ -22,6 +24,7 @@ export default function BoardSettings() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,6 +55,13 @@ export default function BoardSettings() {
     }
   }
 
+  function applyImage() {
+    const url = imageUrl.trim();
+    if (!url) return;
+    updateBoard({ background: `url("${url}") center/cover no-repeat` });
+    setImageUrl('');
+  }
+
   return (
     <div className="board-header-extra" style={{ position: 'relative' }} ref={popRef}>
       <button className="ghost small" onClick={() => setOpen((v) => !v)}>
@@ -60,14 +70,14 @@ export default function BoardSettings() {
       {open && (
         <div className="board-settings-popover">
           <div>
-            <h4>Background</h4>
+            <h4>Gradient background</h4>
             <div className="bg-picker">
               <button
                 className={`bg-swatch ${board.background === null ? 'sel' : ''}`}
                 style={{ background: 'var(--surface-2)' }}
                 onClick={() => updateBoard({ background: null })}
                 disabled={busy}
-                title="Default (deterministic gradient)"
+                title="Default"
               >—</button>
               {BACKGROUNDS.map((b) => (
                 <button
@@ -79,6 +89,39 @@ export default function BoardSettings() {
                   title={b.name}
                 />
               ))}
+            </div>
+          </div>
+          <div>
+            <h4>Solid</h4>
+            <div className="bg-picker">
+              {SOLID_COLORS.map((c) => (
+                <button
+                  key={c}
+                  className={`bg-swatch ${board.background === c ? 'sel' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => updateBoard({ background: c })}
+                  disabled={busy}
+                  title={c}
+                />
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4>Image URL</h4>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="text"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://…"
+                onKeyDown={(e) => { if (e.key === 'Enter') applyImage(); }}
+              />
+              <button className="primary small" onClick={applyImage} disabled={busy || !imageUrl.trim()}>
+                Apply
+              </button>
+            </div>
+            <div className="muted small" style={{ marginTop: 4 }}>
+              Paste an image URL to use it as the board background.
             </div>
           </div>
           <div>

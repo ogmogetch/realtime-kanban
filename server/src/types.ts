@@ -13,6 +13,7 @@ export interface Card {
   title: string;
   description: string;
   order: number;
+  color: string | null;
   labelIds: string[];
   assigneeIds: string[];
 }

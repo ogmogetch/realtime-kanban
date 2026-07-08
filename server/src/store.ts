@@ -132,7 +132,7 @@ export async function getSnapshot(boardId: string): Promise<BoardSnapshot | null
       `SELECT * FROM columns WHERE board_id = $1 ORDER BY "order" ASC`,
       [boardId]
     ),
-    query<{ id: string; column_id: string; title: string; description: string; order: number }>(
+    query<{ id: string; column_id: string; title: string; description: string; order: number; color: string | null }>(
       `SELECT c.* FROM cards c
        JOIN columns col ON col.id = c.column_id
        WHERE col.board_id = $1
@@ -186,6 +186,7 @@ export async function getSnapshot(boardId: string): Promise<BoardSnapshot | null
     title: r.title,
     description: r.description,
     order: r.order,
+    color: r.color,
     labelIds: labelsByCard.get(r.id) ?? [],
     assigneeIds: assigneesByCard.get(r.id) ?? [],
   }));
@@ -279,7 +280,7 @@ export async function updateColumnTitle(columnId: string, title: string): Promis
 // ------------- Cards -------------
 
 async function fetchCard(cardId: string): Promise<Card | null> {
-  const { rows } = await query<{ id: string; column_id: string; title: string; description: string; order: number }>(
+  const { rows } = await query<{ id: string; column_id: string; title: string; description: string; order: number; color: string | null }>(
     `SELECT * FROM cards WHERE id = $1`,
     [cardId]
   );
@@ -295,6 +296,7 @@ async function fetchCard(cardId: string): Promise<Card | null> {
     title: r.title,
     description: r.description,
     order: r.order,
+    color: r.color,
     labelIds: labels.rows.map((x) => x.label_id),
     assigneeIds: assignees.rows.map((x) => x.user_id),
   };
@@ -313,7 +315,7 @@ export async function createCard(columnId: string, title: string): Promise<Card 
     `INSERT INTO cards (id, column_id, title, "order") VALUES ($1, $2, $3, $4)`,
     [id, columnId, title, order]
   );
-  return { id, columnId, title, description: '', order, labelIds: [], assigneeIds: [] };
+  return { id, columnId, title, description: '', order, color: null, labelIds: [], assigneeIds: [] };
 }
 
 export async function deleteCard(cardId: string): Promise<boolean> {
@@ -321,7 +323,7 @@ export async function deleteCard(cardId: string): Promise<boolean> {
   return (rowCount ?? 0) > 0;
 }
 
-export async function updateCard(cardId: string, patch: { title?: string; description?: string }): Promise<Card | null> {
+export async function updateCard(cardId: string, patch: { title?: string; description?: string; color?: string | null }): Promise<Card | null> {
   const fields: string[] = [];
   const values: unknown[] = [];
   let i = 1;
@@ -332,6 +334,10 @@ export async function updateCard(cardId: string, patch: { title?: string; descri
   if (patch.description !== undefined) {
     fields.push(`description = $${i++}`);
     values.push(patch.description);
+  }
+  if (patch.color !== undefined) {
+    fields.push(`color = $${i++}`);
+    values.push(patch.color);
   }
   if (fields.length === 0) return null;
   values.push(cardId);

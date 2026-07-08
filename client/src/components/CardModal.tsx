@@ -55,6 +55,7 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState(NEW_LABEL_COLORS[0]);
   const [copiedLink, setCopiedLink] = useState(false);
+  const CARD_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
 
   useEffect(() => {
     setTitle(card?.title ?? '');
@@ -104,6 +105,10 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
 
   function toggleAssignee(userId: string) {
     getSocket().emit('card:assignee:toggle', { cardId: card!.id, userId }, () => {});
+  }
+
+  function setColor(color: string | null) {
+    getSocket().emit('card:update', { cardId: card!.id, color }, () => {});
   }
 
   function remove() {
@@ -192,6 +197,29 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
                   </span>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {!readOnly && (
+          <div className="modal-section">
+            <div className="modal-section-title">Card color</div>
+            <div className="color-picker">
+              <button
+                className={`color-swatch ${card.color === null ? 'sel' : ''}`}
+                style={{ background: 'var(--surface-2)' }}
+                onClick={() => setColor(null)}
+                title="None"
+              />
+              {CARD_COLORS.map((c) => (
+                <button
+                  key={c}
+                  className={`color-swatch ${card.color === c ? 'sel' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => setColor(c)}
+                  title={c}
+                />
+              ))}
             </div>
           </div>
         )}
