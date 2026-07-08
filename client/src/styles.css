@@ -1210,6 +1210,56 @@ label input, label textarea { text-transform: none; letter-spacing: 0; font-weig
   border-bottom: 1px solid rgba(59, 130, 246, 0.35);
 }
 
+/* ---------- Keyboard shortcuts ---------- */
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-strong);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.shortcuts-hint {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.shortcuts-modal { max-width: 460px; }
+.shortcuts-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shortcuts-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 13px;
+}
+
 /* ---------- Search ---------- */
 
 .search-bar {

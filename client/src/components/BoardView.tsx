@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -19,6 +19,7 @@ import { getSocket } from '../socket.js';
 import ColumnView from './ColumnView.js';
 import CardView from './CardView.js';
 import CardModal from './CardModal.js';
+import ShortcutsOverlay from './ShortcutsOverlay.js';
 import type { Card, Column } from '../types.js';
 
 export default function BoardView({ readOnly = false }: { readOnly?: boolean }) {
@@ -75,6 +76,46 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
 
   const [newColTitle, setNewColTitle] = useState('');
   const [adding, setAdding] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+
+  useEffect(() => {
+    if (readOnly) return;
+    function isTyping(target: EventTarget | null): boolean {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (el.isContentEditable) return true;
+      return false;
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setShowHelp((v) => !v);
+        return;
+      }
+      if (e.key === 'Escape' && showHelp) {
+        setShowHelp(false);
+        return;
+      }
+      if (isTyping(e.target)) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        (document.querySelector('.filter-bar input') as HTMLInputElement | null)?.focus();
+      } else if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        const btn = document.querySelector('.board .column:not(.add-column-wrapper) .add-card') as HTMLButtonElement | null;
+        btn?.click();
+        btn?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setAdding(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [readOnly, showHelp]);
 
   function addColumn() {
     const t = newColTitle.trim();
@@ -276,6 +317,16 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
       </DndContext>
 
       {openCardId && <CardModal cardId={openCardId} onClose={closeCard} readOnly={readOnly} />}
+      {showHelp && <ShortcutsOverlay onClose={() => setShowHelp(false)} />}
+      {!readOnly && (
+        <button
+          className="ghost small shortcuts-hint"
+          onClick={() => setShowHelp(true)}
+          title="Keyboard shortcuts (?)"
+        >
+          <kbd>?</kbd> shortcuts
+        </button>
+      )}
     </>
   );
 }
