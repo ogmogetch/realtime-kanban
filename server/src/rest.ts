@@ -25,6 +25,7 @@ import {
 } from './store.js';
 import { query } from './db.js';
 import { config } from './config.js';
+import { broadcastMeta, broadcastMembers } from './realtime.js';
 
 export const rest = Router();
 
@@ -141,6 +142,7 @@ rest.patch('/boards/:id', requireAuth, async (req: AuthenticatedRequest, res: Re
     await query(`UPDATE boards SET visibility = $1 WHERE id = $2`, [parsed.data.visibility, board.id]);
   }
   const updated = await getBoard(board.id);
+  await broadcastMeta(board.id);
   res.json(updated);
 });
 
@@ -151,12 +153,14 @@ rest.patch('/boards/:id/members/:userId', requireAuth, async (req: Authenticated
   if (!parsed.success) return res.status(400).json({ error: 'invalid input' });
   const member = await setMemberRole(req.params.id, req.auth!.userId, req.params.userId, parsed.data.role);
   if (!member) return res.status(403).json({ error: 'owner only or member not found' });
+  await broadcastMembers(req.params.id);
   res.json(member);
 });
 
 rest.delete('/boards/:id/members/:userId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   const ok = await removeMember(req.params.id, req.auth!.userId, req.params.userId);
   if (!ok) return res.status(403).json({ error: 'owner only or member not found' });
+  await broadcastMembers(req.params.id);
   res.json({ ok: true });
 });
 
@@ -186,6 +190,7 @@ rest.post('/invites/accept', requireAuth, async (req: AuthenticatedRequest, res:
   if (!payload) return res.status(400).json({ error: 'invalid or expired invite' });
   const member = await joinBoardViaInvite(payload.boardId, req.auth!.userId);
   if (!member) return res.status(404).json({ error: 'board not found' });
+  await broadcastMembers(payload.boardId);
   res.json({ boardId: payload.boardId, member });
 });
 
