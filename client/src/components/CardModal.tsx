@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useBoardStore } from '../store.js';
 import { getSocket } from '../socket.js';
+import { autolink, extractUrls, prettyUrl } from '../utils/autolink.js';
 import type { CardEvent } from '../types.js';
 
 interface Props {
@@ -254,8 +255,8 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
         <div className="modal-section">
           <div className="modal-section-title">Description</div>
           {readOnly ? (
-            <div className="modal-desc" style={{ padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
-              {card.description || <span className="muted">No description.</span>}
+            <div className="modal-desc rendered" style={{ padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
+              {card.description ? autolink(card.description) : <span className="muted">No description.</span>}
             </div>
           ) : (
             <textarea
@@ -263,10 +264,24 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
               onBlur={save}
-              placeholder="Add a more detailed description…"
+              placeholder="Paste code links, docs, tickets… URLs become clickable below."
               rows={5}
             />
           )}
+          {(() => {
+            const urls = extractUrls(readOnly ? card.description : desc);
+            if (urls.length === 0) return null;
+            return (
+              <div className="link-chips">
+                {urls.map((url) => (
+                  <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="link-chip" title={url}>
+                    <span className="link-chip-icon">🔗</span>
+                    {prettyUrl(url)}
+                  </a>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {!readOnly && (

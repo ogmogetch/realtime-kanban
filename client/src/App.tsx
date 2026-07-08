@@ -5,6 +5,7 @@ import BoardPage from './pages/BoardPage.js';
 import LoginPage from './pages/LoginPage.js';
 import RegisterPage from './pages/RegisterPage.js';
 import JoinPage from './pages/JoinPage.js';
+import SettingsPage from './pages/SettingsPage.js';
 import { useAuthStore } from './authStore.js';
 import { api } from './api.js';
 import { disconnectSocket } from './socket.js';
@@ -62,6 +63,14 @@ export default function App() {
         element={
           <RequireAuth>
             <BoardListPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <RequireAuth>
+            <SettingsPage />
           </RequireAuth>
         }
       />

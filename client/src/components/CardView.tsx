@@ -1,4 +1,5 @@
 import { useBoardStore } from '../store.js';
+import { extractUrls } from '../utils/autolink.js';
 import type { Card, Label } from '../types.js';
 
 interface Props {
@@ -23,6 +24,7 @@ export default function CardView({ card, labels, onOpen, isDragging }: Props) {
     .filter((m): m is NonNullable<typeof m> => !!m);
 
   const descPreview = card.description.trim();
+  const linkCount = extractUrls(card.description).length;
 
   return (
     <div
@@ -50,6 +52,13 @@ export default function CardView({ card, labels, onOpen, isDragging }: Props) {
           <span>{descPreview.slice(0, 40)}{descPreview.length > 40 ? '…' : ''}</span>
         </div>
       )}
+      <div className="card-meta-row">
+        {linkCount > 0 && (
+          <span className="card-badge" title={`${linkCount} link${linkCount > 1 ? 's' : ''}`}>
+            🔗 {linkCount}
+          </span>
+        )}
+      </div>
       {assignees.length > 0 && (
         <div className="card-assignees">
           {assignees.slice(0, 4).map((a) => (

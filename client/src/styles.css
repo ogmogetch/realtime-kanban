@@ -881,6 +881,63 @@ label input, label textarea { text-transform: none; letter-spacing: 0; font-weig
   border-top: 1px solid var(--border);
 }
 
+/* ---------- Autolink + card link chips ---------- */
+
+.autolink {
+  color: #a5b4fc;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.autolink:hover { color: #c7d2fe; }
+
+.link-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+  font-size: 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background var(--t-fast), transform var(--t-fast);
+}
+.link-chip:hover {
+  background: rgba(99, 102, 241, 0.22);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.link-chip-icon { font-size: 11px; }
+
+.card-meta-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(148, 163, 184, 0.12);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
 /* ---------- Column drag handle ---------- */
 
 .column-drag-handle {

@@ -7,6 +7,7 @@ import PresenceBar from '../components/PresenceBar.js';
 import RemoteCursors from '../components/RemoteCursors.js';
 import BoardHeader from '../components/BoardHeader.js';
 import { boardGradient } from '../utils/boardColor.js';
+import { useAuthStore } from '../authStore.js';
 
 export default function BoardPage() {
   const { boardId } = useParams<{ boardId: string }>();
@@ -15,6 +16,7 @@ export default function BoardPage() {
   const reconnecting = useBoardStore((s) => s.reconnecting);
   const boardError = useBoardStore((s) => s.boardError);
   const reset = useBoardStore((s) => s.reset);
+  const user = useAuthStore((s) => s.user);
 
   useBoardSocket(boardId ?? null);
 
@@ -22,7 +24,7 @@ export default function BoardPage() {
     return () => reset();
   }, [boardId, reset]);
 
-  const gradient = boardId ? boardGradient(boardId) : undefined;
+  const gradient = board?.background ?? user?.background ?? (boardId ? boardGradient(boardId) : undefined);
 
   return (
     <div

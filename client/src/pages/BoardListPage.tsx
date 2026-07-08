@@ -71,10 +71,10 @@ export default function BoardListPage() {
         </div>
         <div className="topbar-right">
           {user && (
-            <span className="username-chip">
-              <span className="dot" />
-              {user.username}
-            </span>
+            <Link to="/settings" className="username-chip" style={{ textDecoration: 'none' }}>
+              <span className="dot" style={{ background: user.avatarColor ?? undefined }} />
+              {user.displayName || user.username}
+            </Link>
           )}
           <button onClick={logout}>Sign out</button>
         </div>
@@ -109,7 +109,7 @@ export default function BoardListPage() {
               to={`/b/${b.id}`}
               key={b.id}
               className="board-card"
-              style={{ background: boardGradient(b.id) }}
+              style={{ background: b.background ?? boardGradient(b.id) }}
               aria-label={`Open board ${b.title}`}
             >
               <div className="board-card-actions">
