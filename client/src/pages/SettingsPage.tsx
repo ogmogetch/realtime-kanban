@@ -92,7 +92,11 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="settings-card" style={{ marginTop: 24 }}>
+      <form
+        className="settings-card"
+        style={{ marginTop: 24 }}
+        onSubmit={(e) => { e.preventDefault(); void save(); }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div className="settings-avatar-preview" style={{ background: avatarColor }}>
             {initials(previewName)}
@@ -154,12 +158,12 @@ export default function SettingsPage() {
 
         {err && <div className="form-error">{err}</div>}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="primary" onClick={save} disabled={busy}>
+          <button className="primary" type="submit" disabled={busy}>
             {busy ? 'Saving…' : 'Save changes'}
           </button>
           {msg && <span className="muted small">{msg}</span>}
         </div>
-      </div>
+      </form>
     </div>
   );
 }

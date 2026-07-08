@@ -59,7 +59,13 @@ export function useBoardSocket(boardId: string | null) {
     const onCursorUpdate = (payload: { socketId: string; x: number; y: number }) => setCursor(payload);
     const onCursorLeave = ({ socketId }: { socketId: string }) => removeCursor(socketId);
     const onBoardMeta = (board: Board) => setBoardMeta(board);
-    const onMembers = (members: BoardMember[]) => setMembers(members);
+    const onMembers = (members: BoardMember[]) => {
+      setMembers(members);
+      const meId = useBoardStore.getState().me?.userId;
+      if (meId && !members.some((m) => m.userId === meId)) {
+        setBoardError('You have been removed from this board.');
+      }
+    };
     const onCardEvents = ({ cardId, events }: { cardId: string; events: CardEvent[] }) => setCardEvents(cardId, events);
     const onConnectError = (err: Error) => {
       setBoardError(err.message || 'connection failed');

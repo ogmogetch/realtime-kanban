@@ -4,6 +4,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import { rest } from './rest.js';
 import { registerSocketHandlers } from './sockets.js';
+import { setIo } from './realtime.js';
 import { config } from './config.js';
 import { waitForDb, pool, runMigrations } from './db.js';
 
@@ -25,6 +26,7 @@ async function main() {
     pingInterval: 25000,
     pingTimeout: 30000,
   });
+  setIo(io);
   registerSocketHandlers(io);
 
   server.listen(config.port, () => {

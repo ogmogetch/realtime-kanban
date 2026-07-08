@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   DndContext,
@@ -19,6 +19,9 @@ import { getSocket } from '../socket.js';
 import ColumnView from './ColumnView.js';
 import CardView from './CardView.js';
 import CardModal from './CardModal.js';
+import ShortcutsOverlay from './ShortcutsOverlay.js';
+import LabelFilterDropdown from './LabelFilterDropdown.js';
+import MemberFilterDropdown from './MemberFilterDropdown.js';
 import type { Card, Column } from '../types.js';
 
 export default function BoardView({ readOnly = false }: { readOnly?: boolean }) {
@@ -75,6 +78,46 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
 
   const [newColTitle, setNewColTitle] = useState('');
   const [adding, setAdding] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+
+  useEffect(() => {
+    if (readOnly) return;
+    function isTyping(target: EventTarget | null): boolean {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (el.isContentEditable) return true;
+      return false;
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setShowHelp((v) => !v);
+        return;
+      }
+      if (e.key === 'Escape' && showHelp) {
+        setShowHelp(false);
+        return;
+      }
+      if (isTyping(e.target)) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        (document.querySelector('.filter-bar input') as HTMLInputElement | null)?.focus();
+      } else if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        const btn = document.querySelector('.board .column:not(.add-column-wrapper) .add-card') as HTMLButtonElement | null;
+        btn?.click();
+        btn?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setAdding(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [readOnly, showHelp]);
 
   function addColumn() {
     const t = newColTitle.trim();
@@ -177,34 +220,52 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
         {labels.length > 0 && (
           <>
             <span className="muted small">Labels:</span>
-            {labels.map((l) => (
-              <span
-                key={l.id}
-                className={`label-pill ${labelFilter.has(l.id) ? 'active' : ''}`}
-                style={{ background: l.color }}
-                onClick={() => setLabelFilter((p) => toggleSet(p, l.id))}
-              >
-                {l.name}
-              </span>
-            ))}
+            {labels.length > 10 ? (
+              <LabelFilterDropdown
+                labels={labels}
+                active={labelFilter}
+                onToggle={(id) => setLabelFilter((p) => toggleSet(p, id))}
+                onClear={() => setLabelFilter(new Set())}
+              />
+            ) : (
+              labels.map((l) => (
+                <span
+                  key={l.id}
+                  className={`label-pill ${labelFilter.has(l.id) ? 'active' : ''}`}
+                  style={{ background: l.color }}
+                  onClick={() => setLabelFilter((p) => toggleSet(p, l.id))}
+                >
+                  {l.name}
+                </span>
+              ))
+            )}
           </>
         )}
         {members.length > 0 && (
           <>
             <span className="muted small" style={{ marginLeft: 8 }}>Assignee:</span>
-            <div className="filter-avatars">
-              {members.map((m) => (
-                <span
-                  key={m.userId}
-                  className={`avatar small ${assigneeFilter.has(m.userId) ? 'active' : ''}`}
-                  style={{ background: m.avatarColor }}
-                  title={m.displayName || m.username}
-                  onClick={() => setAssigneeFilter((p) => toggleSet(p, m.userId))}
-                >
-                  {(m.displayName || m.username).slice(0, 2).toUpperCase()}
-                </span>
-              ))}
-            </div>
+            {members.length > 10 ? (
+              <MemberFilterDropdown
+                members={members}
+                active={assigneeFilter}
+                onToggle={(id) => setAssigneeFilter((p) => toggleSet(p, id))}
+                onClear={() => setAssigneeFilter(new Set())}
+              />
+            ) : (
+              <div className="filter-avatars">
+                {members.map((m) => (
+                  <span
+                    key={m.userId}
+                    className={`avatar small ${assigneeFilter.has(m.userId) ? 'active' : ''}`}
+                    style={{ background: m.avatarColor }}
+                    title={m.displayName || m.username}
+                    onClick={() => setAssigneeFilter((p) => toggleSet(p, m.userId))}
+                  >
+                    {(m.displayName || m.username).slice(0, 2).toUpperCase()}
+                  </span>
+                ))}
+              </div>
+            )}
           </>
         )}
         {filterActive && (
@@ -276,6 +337,16 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
       </DndContext>
 
       {openCardId && <CardModal cardId={openCardId} onClose={closeCard} readOnly={readOnly} />}
+      {showHelp && <ShortcutsOverlay onClose={() => setShowHelp(false)} />}
+      {!readOnly && (
+        <button
+          className="ghost small shortcuts-hint"
+          onClick={() => setShowHelp(true)}
+          title="Keyboard shortcuts (?)"
+        >
+          <kbd>?</kbd> shortcuts
+        </button>
+      )}
     </>
   );
 }
