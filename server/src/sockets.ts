@@ -5,9 +5,26 @@ import {
   createCard,
   createColumn,
   deleteCard,
+  deleteColumn,
+  updateColumnTitle,
+  moveColumn,
+  updateCard,
+  createLabel,
+  deleteLabel,
+  toggleCardLabel,
+  toggleCardAssignee,
+  addCardLink,
+  deleteCardLink,
   boardIdForColumn,
   boardIdForCard,
+  getMemberRole,
+  canEdit,
+  type BoardRole,
+  logCardEvent,
+  listCardEvents,
+  getBoard,
 } from './store.js';
+import { verifyToken } from './auth.js';
 import type { CardMovePayload, PresenceUser } from './types.js';
 
 const PRESENCE_COLORS = [
@@ -36,97 +53,315 @@ function broadcastPresence(io: Server, boardId: string) {
   io.to(boardId).emit('presence:update', [...room.users.values()]);
 }
 
+interface AuthedSocket extends Socket {
+  data: {
+    userId: string;
+    username: string;
+    boardId?: string;
+    role?: BoardRole;
+    user?: PresenceUser;
+  };
+}
+
+async function broadcastEvents(io: Server, boardId: string, cardId: string) {
+  const events = await listCardEvents(cardId, 20);
+  io.to(boardId).emit('card:events', { cardId, events });
+}
+
 export function registerSocketHandlers(io: Server) {
-  io.on('connection', (socket: Socket) => {
-    let joinedBoardId: string | null = null;
-    let user: PresenceUser | null = null;
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (!token) return next(new Error('unauthorized'));
+    const payload = verifyToken(token);
+    if (!payload) return next(new Error('invalid token'));
+    (socket as AuthedSocket).data.userId = payload.userId;
+    (socket as AuthedSocket).data.username = payload.username;
+    next();
+  });
 
-    console.log(`[socket] connected ${socket.id}`);
+  io.on('connection', (raw: Socket) => {
+    const socket = raw as AuthedSocket;
+    console.log(`[socket] connected ${socket.id} user=${socket.data.username}`);
 
-    socket.on('board:join', ({ boardId, name }: { boardId: string; name?: string }, ack?: Function) => {
-      const snap = getSnapshot(boardId);
-      if (!snap) {
-        ack?.({ error: 'board not found' });
-        return;
-      }
-      if (joinedBoardId && joinedBoardId !== boardId) {
-        leaveBoard(io, socket, joinedBoardId, user);
+    socket.on('board:join', async ({ boardId }: { boardId: string }, ack?: Function) => {
+      if (!boardId) return ack?.({ error: 'boardId required' });
+      const role = await getMemberRole(boardId, socket.data.userId);
+      if (!role) return ack?.({ error: 'forbidden' });
+      const snap = await getSnapshot(boardId);
+      if (!snap) return ack?.({ error: 'board not found' });
+
+      if (socket.data.boardId && socket.data.boardId !== boardId) {
+        leaveBoard(io, socket, socket.data.boardId);
       }
       socket.join(boardId);
-      joinedBoardId = boardId;
+      socket.data.boardId = boardId;
+      socket.data.role = role;
       const color = PRESENCE_COLORS[Math.floor(Math.random() * PRESENCE_COLORS.length)];
-      user = {
+      const user: PresenceUser = {
         socketId: socket.id,
-        name: (name?.trim() || `User-${socket.id.slice(0, 4)}`).slice(0, 24),
+        userId: socket.data.userId,
+        name: socket.data.username,
         color,
       };
+      socket.data.user = user;
       const room = getRoom(boardId);
       room.users.set(socket.id, user);
       broadcastPresence(io, boardId);
-      ack?.({ snapshot: snap, you: user });
-      console.log(`[socket] ${socket.id} joined ${boardId} as ${user.name}`);
+      ack?.({ snapshot: snap, you: user, role });
     });
 
-    socket.on('card:move', (payload: CardMovePayload, ack?: Function) => {
-      if (!joinedBoardId) return ack?.({ error: 'not in board' });
-      const targetBoardId = boardIdForColumn(payload.toColumnId);
-      const sourceBoardId = boardIdForCard(payload.cardId);
-      if (targetBoardId !== joinedBoardId || sourceBoardId !== joinedBoardId) {
+    socket.on('card:move', async (payload: CardMovePayload, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      const targetBoardId = await boardIdForColumn(payload.toColumnId);
+      const sourceBoardId = await boardIdForCard(payload.cardId);
+      if (targetBoardId !== boardId || sourceBoardId !== boardId) {
         return ack?.({ error: 'forbidden' });
       }
-      const card = moveCard(payload.cardId, payload.toColumnId, payload.toIndex);
-      if (!card) return ack?.({ error: 'card or column missing' });
-      const snap = getSnapshot(joinedBoardId);
-      io.to(joinedBoardId).emit('board:cards', snap?.cards ?? []);
+      const result = await moveCard(payload.cardId, payload.toColumnId, payload.toIndex);
+      if (!result) return ack?.({ error: 'card or column missing' });
+      if (result.fromColumnId !== result.toColumnId) {
+        await logCardEvent(payload.cardId, boardId, socket.data.userId, 'card.moved', {
+          fromColumnId: result.fromColumnId,
+          toColumnId: result.toColumnId,
+        });
+        await broadcastEvents(io, boardId, payload.cardId);
+      }
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true });
-      console.log(`[socket] card ${payload.cardId} moved by ${socket.id}`);
     });
 
-    socket.on('card:create', ({ columnId, title }: { columnId: string; title: string }, ack?: Function) => {
-      if (!joinedBoardId) return ack?.({ error: 'not in board' });
-      if (boardIdForColumn(columnId) !== joinedBoardId) return ack?.({ error: 'forbidden' });
-      const trimmed = (title ?? '').trim();
+    socket.on('card:create', async ({ columnId, title }: { columnId: string; title: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForColumn(columnId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const trimmed = (title ?? '').trim().slice(0, 200);
       if (!trimmed) return ack?.({ error: 'title required' });
-      const card = createCard(columnId, trimmed);
+      const card = await createCard(columnId, trimmed);
       if (!card) return ack?.({ error: 'column missing' });
-      const snap = getSnapshot(joinedBoardId);
-      io.to(joinedBoardId).emit('board:cards', snap?.cards ?? []);
+      await logCardEvent(card.id, boardId, socket.data.userId, 'card.created', { title: card.title });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true, card });
     });
 
-    socket.on('card:delete', ({ cardId }: { cardId: string }, ack?: Function) => {
-      if (!joinedBoardId) return ack?.({ error: 'not in board' });
-      if (boardIdForCard(cardId) !== joinedBoardId) return ack?.({ error: 'forbidden' });
-      deleteCard(cardId);
-      const snap = getSnapshot(joinedBoardId);
-      io.to(joinedBoardId).emit('board:cards', snap?.cards ?? []);
+    socket.on('card:delete', async ({ cardId }: { cardId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      await deleteCard(cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true });
     });
 
-    socket.on('column:create', ({ title }: { title: string }, ack?: Function) => {
-      if (!joinedBoardId) return ack?.({ error: 'not in board' });
-      const trimmed = (title ?? '').trim();
+    socket.on('card:update', async ({ cardId, title, description, color }: { cardId: string; title?: string; description?: string; color?: string | null }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const patch: { title?: string; description?: string; color?: string | null } = {};
+      if (typeof title === 'string') patch.title = title.trim().slice(0, 200);
+      if (typeof description === 'string') patch.description = description.slice(0, 2000);
+      if (color === null || (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color))) patch.color = color;
+      const card = await updateCard(cardId, patch);
+      if (!card) return ack?.({ error: 'no update' });
+      if (patch.title !== undefined) {
+        await logCardEvent(cardId, boardId, socket.data.userId, 'card.renamed', { title: patch.title });
+      }
+      if (patch.description !== undefined) {
+        await logCardEvent(cardId, boardId, socket.data.userId, 'card.description_changed', {});
+      }
+      if (patch.color !== undefined) {
+        await logCardEvent(cardId, boardId, socket.data.userId, 'card.color_changed', { color: patch.color });
+      }
+      await broadcastEvents(io, boardId, cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true, card });
+    });
+
+    socket.on('card:link:add', async ({ cardId, url, title }: { cardId: string; url: string; title?: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const u = (url ?? '').trim().slice(0, 500);
+      if (!/^https?:\/\//i.test(u)) return ack?.({ error: 'url must start with http(s)://' });
+      const t = (title ?? '').trim().slice(0, 120);
+      const result = await addCardLink(cardId, u, t);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'failed' });
+      await logCardEvent(cardId, boardId, socket.data.userId, 'card.link_added', { url: u, title: t });
+      await broadcastEvents(io, boardId, cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true, link: result.link });
+    });
+
+    socket.on('card:link:remove', async ({ linkId }: { linkId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      const result = await deleteCardLink(linkId);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'forbidden' });
+      await logCardEvent(result.cardId, boardId, socket.data.userId, 'card.link_removed', { url: result.url });
+      await broadcastEvents(io, boardId, result.cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true });
+    });
+
+    socket.on('card:events:list', async ({ cardId }: { cardId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const events = await listCardEvents(cardId, 50);
+      ack?.({ ok: true, events });
+    });
+
+    socket.on('card:assignee:toggle', async ({ cardId, userId }: { cardId: string; userId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const result = await toggleCardAssignee(cardId, userId);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'user not a member of this board' });
+      await logCardEvent(
+        cardId, boardId, socket.data.userId,
+        result.attached ? 'card.assigned' : 'card.unassigned',
+        { userId, username: result.username }
+      );
+      await broadcastEvents(io, boardId, cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true, attached: result.attached });
+    });
+
+    socket.on('column:create', async ({ title }: { title: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      const trimmed = (title ?? '').trim().slice(0, 80);
       if (!trimmed) return ack?.({ error: 'title required' });
-      const col = createColumn(joinedBoardId, trimmed);
+      const col = await createColumn(boardId, trimmed);
       if (!col) return ack?.({ error: 'board missing' });
-      const snap = getSnapshot(joinedBoardId);
-      io.to(joinedBoardId).emit('board:columns', snap?.columns ?? []);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:columns', snap?.columns ?? []);
       ack?.({ ok: true, column: col });
     });
 
+    socket.on('column:update', async ({ columnId, title }: { columnId: string; title: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForColumn(columnId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const trimmed = (title ?? '').trim().slice(0, 80);
+      if (!trimmed) return ack?.({ error: 'title required' });
+      const col = await updateColumnTitle(columnId, trimmed);
+      if (!col) return ack?.({ error: 'not found' });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:columns', snap?.columns ?? []);
+      ack?.({ ok: true, column: col });
+    });
+
+    socket.on('column:move', async ({ columnId, toIndex }: { columnId: string; toIndex: number }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForColumn(columnId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const target = Number(toIndex);
+      if (!Number.isFinite(target)) return ack?.({ error: 'invalid index' });
+      const owner = await moveColumn(columnId, Math.floor(target));
+      if (!owner) return ack?.({ error: 'not found' });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:columns', snap?.columns ?? []);
+      ack?.({ ok: true });
+    });
+
+    socket.on('column:delete', async ({ columnId }: { columnId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      if ((await boardIdForColumn(columnId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const removed = await deleteColumn(columnId);
+      if (!removed) return ack?.({ error: 'not found' });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:columns', snap?.columns ?? []);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true });
+    });
+
+    socket.on('label:create', async ({ name, color }: { name: string; color: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      const n = (name ?? '').trim().slice(0, 40);
+      const c = (color ?? '').trim().slice(0, 20);
+      if (!n || !c) return ack?.({ error: 'name/color required' });
+      const label = await createLabel(boardId, n, c);
+      if (!label) return ack?.({ error: 'board missing' });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:labels', snap?.labels ?? []);
+      ack?.({ ok: true, label });
+    });
+
+    socket.on('label:delete', async ({ labelId }: { labelId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      const owner = await deleteLabel(labelId);
+      if (owner !== boardId) return ack?.({ error: 'forbidden' });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:labels', snap?.labels ?? []);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true });
+    });
+
+    socket.on('card:label:toggle', async ({ cardId, labelId }: { cardId: string; labelId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if (!canEdit(socket.data.role ?? null)) return ack?.({ error: 'read-only role' });
+      const result = await toggleCardLabel(cardId, labelId);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'forbidden' });
+      await logCardEvent(
+        cardId, boardId, socket.data.userId,
+        result.attached ? 'card.label_added' : 'card.label_removed',
+        { labelId, labelName: result.labelName }
+      );
+      await broadcastEvents(io, boardId, cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true, attached: result.attached });
+    });
+
+    socket.on('board:refresh', async (_payload: unknown, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      const snap = await getSnapshot(boardId);
+      if (!snap) return ack?.({ error: 'not found' });
+      io.to(boardId).emit('board:meta', snap.board);
+      io.to(boardId).emit('board:members', snap.members);
+      ack?.({ ok: true, board: snap.board });
+    });
+
     socket.on('cursor:move', ({ x, y }: { x: number; y: number }) => {
-      if (!joinedBoardId || !user) return;
-      socket.to(joinedBoardId).emit('cursor:update', { socketId: socket.id, x, y });
+      const boardId = socket.data.boardId;
+      if (!boardId) return;
+      socket.to(boardId).emit('cursor:update', { socketId: socket.id, x, y });
     });
 
     socket.on('disconnect', () => {
-      if (joinedBoardId) leaveBoard(io, socket, joinedBoardId, user);
+      if (socket.data.boardId) leaveBoard(io, socket, socket.data.boardId);
       console.log(`[socket] disconnected ${socket.id}`);
     });
   });
 }
 
-function leaveBoard(io: Server, socket: Socket, boardId: string, user: PresenceUser | null) {
+function leaveBoard(io: Server, socket: AuthedSocket, boardId: string) {
   const room = rooms.get(boardId);
   if (!room) return;
   room.users.delete(socket.id);

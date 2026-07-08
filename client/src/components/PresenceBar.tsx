@@ -6,13 +6,13 @@ export default function PresenceBar() {
 
   return (
     <div className="presence">
-      <span style={{ color: 'var(--muted)', fontSize: 12, marginRight: 4 }}>
+      <span className="count">
         {presence.length} online
       </span>
       {presence.map((u) => (
         <span
           key={u.socketId}
-          className="avatar"
+          className={`avatar ${u.socketId === me?.socketId ? 'me' : ''}`}
           style={{ background: u.color }}
           title={u.name + (u.socketId === me?.socketId ? ' (you)' : '')}
         >
