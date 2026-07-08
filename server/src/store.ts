@@ -96,6 +96,56 @@ export async function isBoardMember(boardId: string, userId: string): Promise<bo
   return (rowCount ?? 0) > 0;
 }
 
+export type BoardRole = 'owner' | 'member' | 'viewer';
+
+export async function getMemberRole(boardId: string, userId: string): Promise<BoardRole | null> {
+  const { rows } = await query<{ role: string }>(
+    `SELECT role FROM board_members WHERE board_id = $1 AND user_id = $2`,
+    [boardId, userId]
+  );
+  const r = rows[0]?.role;
+  if (r === 'owner' || r === 'member' || r === 'viewer') return r;
+  return null;
+}
+
+export function canEdit(role: BoardRole | null): boolean {
+  return role === 'owner' || role === 'member';
+}
+
+export async function setMemberRole(
+  boardId: string,
+  ownerId: string,
+  targetUserId: string,
+  role: 'member' | 'viewer'
+): Promise<BoardMember | null> {
+  const ownerCheck = await query(`SELECT 1 FROM boards WHERE id = $1 AND owner_id = $2`, [boardId, ownerId]);
+  if ((ownerCheck.rowCount ?? 0) === 0) return null;
+  if (targetUserId === ownerId) return null;
+  const { rows } = await query<{ user_id: string; username: string; display_name: string | null; avatar_color: string; role: string }>(
+    `UPDATE board_members SET role = $1
+     WHERE board_id = $2 AND user_id = $3 AND role <> 'owner'
+     RETURNING user_id, role,
+       (SELECT username FROM users WHERE id = user_id) AS username,
+       (SELECT display_name FROM users WHERE id = user_id) AS display_name,
+       (SELECT avatar_color FROM users WHERE id = user_id) AS avatar_color`,
+    [role, boardId, targetUserId]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return { userId: r.user_id, username: r.username, displayName: r.display_name, avatarColor: r.avatar_color, role: r.role };
+}
+
+export async function removeMember(boardId: string, ownerId: string, targetUserId: string): Promise<boolean> {
+  const ownerCheck = await query(`SELECT 1 FROM boards WHERE id = $1 AND owner_id = $2`, [boardId, ownerId]);
+  if ((ownerCheck.rowCount ?? 0) === 0) return false;
+  if (targetUserId === ownerId) return false;
+  const { rowCount } = await query(
+    `DELETE FROM board_members WHERE board_id = $1 AND user_id = $2 AND role <> 'owner'`,
+    [boardId, targetUserId]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 export async function joinBoardViaInvite(boardId: string, userId: string): Promise<BoardMember | null> {
   const boardCheck = await query(`SELECT 1 FROM boards WHERE id = $1`, [boardId]);
   if ((boardCheck.rowCount ?? 0) === 0) return null;

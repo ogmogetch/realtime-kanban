@@ -14,9 +14,11 @@ interface BoardState {
   connected: boolean;
   reconnecting: boolean;
   boardError: string | null;
+  myRole: 'owner' | 'member' | 'viewer' | null;
 
   setSnapshot: (payload: { board: Board; columns: Column[]; cards: Card[]; labels: Label[]; members: BoardMember[] }) => void;
   setBoardMeta: (board: Board) => void;
+  setMembers: (members: BoardMember[]) => void;
   setColumns: (columns: Column[]) => void;
   setCards: (cards: Card[]) => void;
   setLabels: (labels: Label[]) => void;
@@ -29,6 +31,7 @@ interface BoardState {
   setConnected: (v: boolean) => void;
   setReconnecting: (v: boolean) => void;
   setBoardError: (v: string | null) => void;
+  setMyRole: (v: 'owner' | 'member' | 'viewer' | null) => void;
   setCardEvents: (cardId: string, events: CardEvent[]) => void;
   reset: () => void;
 }
@@ -46,6 +49,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   connected: false,
   reconnecting: false,
   boardError: null,
+  myRole: null,
 
   setSnapshot: ({ board, columns, cards, labels, members }) =>
     set({
@@ -57,6 +61,7 @@ export const useBoardStore = create<BoardState>((set) => ({
       boardError: null,
     }),
   setBoardMeta: (board) => set({ board }),
+  setMembers: (members) => set({ members }),
   setColumns: (columns) => set({ columns: [...columns].sort((a, b) => a.order - b.order) }),
   setCards: (cards) => set({ cards: [...cards].sort((a, b) => a.order - b.order) }),
   setLabels: (labels) => set({ labels }),
@@ -114,6 +119,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   setConnected: (v) => set({ connected: v }),
   setReconnecting: (v) => set({ reconnecting: v }),
   setBoardError: (v) => set({ boardError: v }),
+  setMyRole: (v) => set({ myRole: v }),
   setCardEvents: (cardId, events) =>
     set((s) => ({ cardEvents: { ...s.cardEvents, [cardId]: events } })),
   reset: () =>
@@ -128,5 +134,6 @@ export const useBoardStore = create<BoardState>((set) => ({
       cardEvents: {},
       me: null,
       boardError: null,
+      myRole: null,
     }),
 }));

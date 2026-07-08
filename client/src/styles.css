@@ -1087,6 +1087,34 @@ label input, label textarea { text-transform: none; letter-spacing: 0; font-weig
   border-color: transparent;
 }
 
+/* ---------- Member list ---------- */
+
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.member-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.member-list-row .avatar.small { margin-left: 0; }
+.member-list-name { flex: 1; }
+.member-list-name > div:first-child { font-weight: 500; }
+.member-list-row select {
+  background: var(--bg-1);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
 /* ---------- Read-only badge ---------- */
 
 .readonly-banner {
