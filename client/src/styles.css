@@ -134,10 +134,9 @@ button.small {
 
 /* ---------- Inputs ---------- */
 
-input[type="text"],
-input[type="email"],
-input[type="password"],
-textarea {
+input:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea,
+select {
   background: var(--bg-1);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -145,12 +144,16 @@ textarea {
   outline: none;
   width: 100%;
   color: var(--text);
+  font: inherit;
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  -webkit-appearance: none;
+  appearance: none;
 }
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
   box-shadow: var(--shadow-glow);
 }
+input::placeholder, textarea::placeholder { color: var(--muted); }
 textarea { resize: vertical; font-family: inherit; }
 
 label {
