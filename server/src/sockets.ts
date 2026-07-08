@@ -7,6 +7,7 @@ import {
   deleteCard,
   deleteColumn,
   updateColumnTitle,
+  moveColumn,
   updateCard,
   createLabel,
   deleteLabel,
@@ -218,6 +219,19 @@ export function registerSocketHandlers(io: Server) {
       const snap = await getSnapshot(boardId);
       io.to(boardId).emit('board:columns', snap?.columns ?? []);
       ack?.({ ok: true, column: col });
+    });
+
+    socket.on('column:move', async ({ columnId, toIndex }: { columnId: string; toIndex: number }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if ((await boardIdForColumn(columnId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const target = Number(toIndex);
+      if (!Number.isFinite(target)) return ack?.({ error: 'invalid index' });
+      const owner = await moveColumn(columnId, Math.floor(target));
+      if (!owner) return ack?.({ error: 'not found' });
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:columns', snap?.columns ?? []);
+      ack?.({ ok: true });
     });
 
     socket.on('column:delete', async ({ columnId }: { columnId: string }, ack?: Function) => {

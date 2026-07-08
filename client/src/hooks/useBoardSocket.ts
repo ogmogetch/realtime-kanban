@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { getSocket } from '../socket.js';
 import { useBoardStore } from '../store.js';
 import { useAuthStore } from '../authStore.js';
-import type { BoardSnapshot, Column, Card, Label, PresenceUser } from '../types.js';
+import type { Board, BoardSnapshot, CardEvent, Column, Card, Label, PresenceUser } from '../types.js';
 
 export function useBoardSocket(boardId: string | null) {
   const token = useAuthStore((s) => s.token);
@@ -17,6 +17,8 @@ export function useBoardSocket(boardId: string | null) {
   const setConnected = useBoardStore((s) => s.setConnected);
   const setReconnecting = useBoardStore((s) => s.setReconnecting);
   const setBoardError = useBoardStore((s) => s.setBoardError);
+  const setBoardMeta = useBoardStore((s) => s.setBoardMeta);
+  const setCardEvents = useBoardStore((s) => s.setCardEvents);
 
   useEffect(() => {
     if (!boardId || !token) return;
@@ -53,6 +55,8 @@ export function useBoardSocket(boardId: string | null) {
     const onPresence = (users: PresenceUser[]) => setPresence(users);
     const onCursorUpdate = (payload: { socketId: string; x: number; y: number }) => setCursor(payload);
     const onCursorLeave = ({ socketId }: { socketId: string }) => removeCursor(socketId);
+    const onBoardMeta = (board: Board) => setBoardMeta(board);
+    const onCardEvents = ({ cardId, events }: { cardId: string; events: CardEvent[] }) => setCardEvents(cardId, events);
     const onConnectError = (err: Error) => {
       setBoardError(err.message || 'connection failed');
     };
@@ -66,6 +70,8 @@ export function useBoardSocket(boardId: string | null) {
     socket.on('presence:update', onPresence);
     socket.on('cursor:update', onCursorUpdate);
     socket.on('cursor:leave', onCursorLeave);
+    socket.on('board:meta', onBoardMeta);
+    socket.on('card:events', onCardEvents);
 
     if (socket.connected) onConnect();
 
@@ -79,6 +85,8 @@ export function useBoardSocket(boardId: string | null) {
       socket.off('presence:update', onPresence);
       socket.off('cursor:update', onCursorUpdate);
       socket.off('cursor:leave', onCursorLeave);
+      socket.off('board:meta', onBoardMeta);
+      socket.off('card:events', onCardEvents);
     };
-  }, [boardId, token, setSnapshot, setColumns, setCards, setLabels, setPresence, setCursor, removeCursor, setMe, setConnected, setReconnecting, setBoardError]);
+  }, [boardId, token, setSnapshot, setColumns, setCards, setLabels, setPresence, setCursor, removeCursor, setMe, setConnected, setReconnecting, setBoardError, setBoardMeta, setCardEvents]);
 }

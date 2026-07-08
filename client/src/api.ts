@@ -1,4 +1,4 @@
-import type { Board, User } from './types.js';
+import type { Board, BoardSnapshot, User } from './types.js';
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 
@@ -23,6 +23,17 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface ProfilePatch {
+  displayName?: string | null;
+  avatarColor?: string;
+  background?: string | null;
+}
+
+export interface BoardPatch {
+  background?: string | null;
+  visibility?: 'private' | 'link';
+}
+
 export const api = {
   register: (body: { email: string; username: string; password: string }) =>
     req<{ user: User; token: string }>('/api/auth/register', {
@@ -35,12 +46,17 @@ export const api = {
       body: JSON.stringify(body),
     }),
   me: () => req<{ user: User }>('/api/auth/me'),
+  updateProfile: (patch: ProfilePatch) =>
+    req<{ user: User }>('/api/auth/me', { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listBoards: () => req<Board[]>('/api/boards'),
   createBoard: (title: string) =>
     req<Board>('/api/boards', { method: 'POST', body: JSON.stringify({ title }) }),
   deleteBoard: (id: string) =>
     req<{ ok: true }>(`/api/boards/${id}`, { method: 'DELETE' }),
+  updateBoard: (id: string, patch: BoardPatch) =>
+    req<Board>(`/api/boards/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
   createInviteLink: (boardId: string) =>
     req<{ token: string; url: string }>(`/api/boards/${boardId}/invite-link`, { method: 'POST' }),
   acceptInvite: (token: string) =>
@@ -48,6 +64,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ token }),
     }),
+
+  publicSnapshot: (token: string) =>
+    req<BoardSnapshot>(`/api/public/boards/${token}/snapshot`),
 };
 
 export const API_URL = BASE;

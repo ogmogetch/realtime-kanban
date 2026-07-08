@@ -243,6 +243,28 @@ export async function deleteColumn(columnId: string): Promise<string | null> {
   return boardId;
 }
 
+export async function moveColumn(columnId: string, toIndex: number): Promise<string | null> {
+  return tx(async (c) => {
+    const boardRes = await c.query<{ board_id: string }>(
+      `SELECT board_id FROM columns WHERE id = $1 FOR UPDATE`,
+      [columnId]
+    );
+    const boardId = boardRes.rows[0]?.board_id;
+    if (!boardId) return null;
+    const otherRes = await c.query<{ id: string }>(
+      `SELECT id FROM columns WHERE board_id = $1 AND id <> $2 ORDER BY "order" ASC`,
+      [boardId, columnId]
+    );
+    const order = otherRes.rows.map((r) => r.id);
+    const clamped = Math.max(0, Math.min(toIndex, order.length));
+    order.splice(clamped, 0, columnId);
+    for (let i = 0; i < order.length; i++) {
+      await c.query(`UPDATE columns SET "order" = $1 WHERE id = $2`, [i, order[i]]);
+    }
+    return boardId;
+  });
+}
+
 export async function updateColumnTitle(columnId: string, title: string): Promise<Column | null> {
   const { rows } = await query<{ id: string; board_id: string; title: string; order: number }>(
     `UPDATE columns SET title = $1 WHERE id = $2 RETURNING *`,

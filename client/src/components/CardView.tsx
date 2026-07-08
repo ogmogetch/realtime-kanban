@@ -1,3 +1,4 @@
+import { useBoardStore } from '../store.js';
 import type { Card, Label } from '../types.js';
 
 interface Props {
@@ -7,10 +8,19 @@ interface Props {
   isDragging?: boolean;
 }
 
+function initials(name: string) {
+  return name.slice(0, 2).toUpperCase();
+}
+
 export default function CardView({ card, labels, onOpen, isDragging }: Props) {
+  const members = useBoardStore((s) => s.members);
   const cardLabels = card.labelIds
     .map((id) => labels.find((l) => l.id === id))
     .filter((l): l is Label => !!l);
+
+  const assignees = card.assigneeIds
+    .map((id) => members.find((m) => m.userId === id))
+    .filter((m): m is NonNullable<typeof m> => !!m);
 
   const descPreview = card.description.trim();
 
@@ -38,6 +48,25 @@ export default function CardView({ card, labels, onOpen, isDragging }: Props) {
         <div className="card-desc-icon" title="Has description">
           <span>≡</span>
           <span>{descPreview.slice(0, 40)}{descPreview.length > 40 ? '…' : ''}</span>
+        </div>
+      )}
+      {assignees.length > 0 && (
+        <div className="card-assignees">
+          {assignees.slice(0, 4).map((a) => (
+            <span
+              key={a.userId}
+              className="avatar small"
+              style={{ background: a.avatarColor }}
+              title={a.displayName || a.username}
+            >
+              {initials(a.displayName || a.username)}
+            </span>
+          ))}
+          {assignees.length > 4 && (
+            <span className="avatar small more" title={`${assignees.length - 4} more`}>
+              +{assignees.length - 4}
+            </span>
+          )}
         </div>
       )}
     </div>
