@@ -305,29 +305,8 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
 
         <div className="modal-section">
           <div className="modal-section-title">Links</div>
-          {card.links.length === 0 && readOnly && <div className="muted small">No links.</div>}
-          <div className="link-list">
-            {card.links.map((l) => (
-              <div key={l.id} className="link-row">
-                <a href={l.url} target="_blank" rel="noopener noreferrer" className="link-chip" title={l.url}>
-                  <span className="link-chip-icon">🔗</span>
-                  {l.title || prettyUrl(l.url)}
-                </a>
-                {!readOnly && (
-                  <button className="icon" onClick={() => removeLink(l.id)} title="Remove link">×</button>
-                )}
-              </div>
-            ))}
-          </div>
           {!readOnly && (
             <div className="link-add">
-              <input
-                type="text"
-                value={linkTitle}
-                onChange={(e) => setLinkTitle(e.target.value)}
-                placeholder="Title (optional)"
-                maxLength={120}
-              />
               <input
                 type="url"
                 value={linkUrl}
@@ -335,10 +314,39 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
                 placeholder="https://…"
                 onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }}
               />
-              <button className="primary small" onClick={addLink} disabled={!linkUrl.trim()}>Add</button>
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }}
+                placeholder="Label (optional)"
+                maxLength={120}
+              />
+              <button className="primary small" onClick={addLink} disabled={!linkUrl.trim()}>+ Add</button>
             </div>
           )}
           {linkErr && <div className="form-error small">{linkErr}</div>}
+          {card.links.length > 0 ? (
+            <div className="link-list">
+              {card.links.map((l) => (
+                <div key={l.id} className="link-row">
+                  <a href={l.url} target="_blank" rel="noopener noreferrer" className="link-item" title={l.url}>
+                    <span className="link-item-icon">🔗</span>
+                    <span className="link-item-body">
+                      <span className="link-item-title">{l.title || prettyUrl(l.url)}</span>
+                      {l.title && <span className="link-item-url">{prettyUrl(l.url)}</span>}
+                    </span>
+                    <span className="link-item-arrow" aria-hidden>↗</span>
+                  </a>
+                  {!readOnly && (
+                    <button className="icon link-remove" onClick={() => removeLink(l.id)} title="Remove link">×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            readOnly && <div className="muted small">No links.</div>
+          )}
         </div>
 
         <div className="modal-section">

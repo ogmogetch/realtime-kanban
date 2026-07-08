@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useBoardStore } from '../store.js';
 import { useAuthStore } from '../authStore.js';
 import { api } from '../api.js';
@@ -28,7 +28,8 @@ export default function BoardSettings() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,11 +60,33 @@ export default function BoardSettings() {
     }
   }
 
-  function applyImage() {
-    const url = imageUrl.trim();
-    if (!url) return;
-    updateBoard({ background: `url("${url}") center/cover no-repeat` });
-    setImageUrl('');
+  async function onPickFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.type !== 'image/png') {
+      setErr('PNG only');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setErr('Image must be under 4 MB');
+      return;
+    }
+    setUploading(true);
+    setErr(null);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      await updateBoard({ background: `url("${dataUrl}") center/cover no-repeat` });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -111,21 +134,30 @@ export default function BoardSettings() {
             </div>
           </div>
           <div>
-            <h4>Image URL</h4>
+            <h4>Image upload</h4>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png"
+              onChange={onPickFile}
+              style={{ display: 'none' }}
+            />
             <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                type="text"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://…"
-                onKeyDown={(e) => { if (e.key === 'Enter') applyImage(); }}
-              />
-              <button className="primary small" onClick={applyImage} disabled={busy || !imageUrl.trim()}>
-                Apply
+              <button
+                className="primary small"
+                onClick={() => fileRef.current?.click()}
+                disabled={busy || uploading}
+              >
+                {uploading ? 'Uploading…' : 'Choose PNG file'}
               </button>
+              {board.background?.startsWith('url(') && (
+                <button className="ghost small" onClick={() => updateBoard({ background: null })} disabled={busy || uploading}>
+                  Remove
+                </button>
+              )}
             </div>
             <div className="muted small" style={{ marginTop: 4 }}>
-              Paste an image URL to use it as the board background.
+              PNG only, max 4 MB. Stored inline as a data URL.
             </div>
           </div>
           <div>

@@ -124,7 +124,7 @@ rest.get('/boards/:id/snapshot', requireAuth, async (req: AuthenticatedRequest, 
 });
 
 const boardPatchSchema = z.object({
-  background: z.string().max(200).nullable().optional(),
+  background: z.string().max(5_000_000).nullable().optional(),
   visibility: z.enum(['private', 'public']).optional(),
 });
 
