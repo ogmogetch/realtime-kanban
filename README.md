@@ -1,168 +1,221 @@
 # Realtime Kanban
 
-A modern, Trello-like collaborative board where every action — dragging a card, creating a column, editing a title, adding a label — is synchronized live across every browser open on the same board. No refresh. No polling. WebSockets only.
+A collaborative kanban board built to demonstrate mastery of two areas most junior engineers skip: **real-time synchronization** and **complex frontend state**.
 
-Built to showcase mastery of two areas most junior candidates skip:
+Every action — dragging a card, editing a title, attaching a label, changing a role — is synchronized live across every browser open on the same board, with no polling and no refresh. Backed by PostgreSQL, guarded by JWT auth, and delivered through a modern, keyboard-friendly UI.
 
-- **Real-time synchronization** (Socket.io rooms, optimistic UI, reconciliation)
-- **Complex frontend state** (Zustand store, drag & drop with `dnd-kit`, remote cursors)
+---
 
-Backed by PostgreSQL with a clean auth layer (JWT + bcrypt) so multiple users can register, sign in, and collaborate on their own boards.
+## Table of contents
+
+1. [Highlights](#highlights)
+2. [Stack](#stack)
+3. [Getting started](#getting-started)
+4. [Environment](#environment)
+5. [Architecture](#architecture)
+6. [Feature reference](#feature-reference)
+7. [Keyboard shortcuts](#keyboard-shortcuts)
+8. [REST API](#rest-api)
+9. [Socket events](#socket-events)
+10. [Database schema](#database-schema)
+11. [Repository layout](#repository-layout)
+12. [Development workflow](#development-workflow)
+13. [Roadmap](#roadmap)
+14. [License](#license)
+
+---
+
+## Highlights
+
+- **Live everything**. Card moves, column reorders, labels, assignees, board settings, and member changes are broadcast to all connected clients through Socket.io rooms.
+- **Authenticated multi-user**. Register with email + username, log in with either, backed by bcrypt password hashing and JWT session tokens.
+- **Role-based access**. Every board has an owner, members, and read-only viewers. Server-side gates enforce every mutation; client hides destructive controls when the role does not permit them.
+- **Shareable invite links**. Owners generate signed invite tokens; recipients auto-join after signing in. Public boards expose a `/view/:token` read-only route that works without an account.
+- **Rich cards**. Colors, labels, assignees, dedicated link attachments (with add form and clickable list), description, and a per-card activity timeline.
+- **Board personalization**. Owners choose from gradient, solid, or uploaded PNG backgrounds and flip visibility between private and public.
+- **User personalization**. `/settings` page for display name, avatar color, and default board background.
+- **Search & filters that scale**. Dashboard search across boards; per-board card filter with text, label pills or dropdown (auto-collapsed past 10 labels), and assignee avatars or dropdown (past 10 members).
+- **Keyboard-first**. Global shortcuts on the board (search, add card, add column, help overlay). Enter submits every add form. Description textarea keeps native newline behavior.
+- **WebSocket-only transport**. Explicit `transports: ['websocket']` on both ends, 25 s ping interval, 30 s timeout — no more `xhr poll error` flapping.
+- **Presence + live cursors**. Colored avatar bar of everyone currently on the board, Figma-style remote cursors.
 
 ---
 
 ## Stack
 
-| Layer | Tech |
+| Layer | Technology |
 | --- | --- |
-| Frontend | React 18, Vite, TypeScript, Zustand, `@dnd-kit`, `socket.io-client`, React Router |
-| Backend | Node.js, Express, Socket.io, TypeScript (ESM), Zod for input validation |
-| Database | PostgreSQL 16 (via Docker Compose), `pg` driver, transactional writes |
-| Auth | JSON Web Tokens (7-day TTL), `bcryptjs` password hashing |
-
----
-
-## Features
-
-### Core
-
-- **Accounts**: register with email + username + password, log in with either email or username
-- **Boards, columns, cards CRUD** — all persisted in Postgres
-- **Live drag & drop** of cards inside a column and across columns, broadcast to every connected client
-- **Optimistic UI**: the local state is updated instantly, then reconciled against the server broadcast
-- **Presence bar**: colored avatars for everyone currently viewing the board
-- **Live remote cursors** (Figma-style) with per-user color and name
-- **Auto-reconnect**: on connection loss, a banner shows the reconnecting state and a fresh snapshot is pulled once the socket is back
-- **Server-authoritative permissions**: every socket event is re-checked against board membership on the server
-
-### Boards you can actually use
-
-- **Labels**: create, color-pick, attach/detach on cards, delete from the board — synced live
-- **Card details modal**: full title, description, label management, deletion
-- **Column management**: create, delete
-- **Members**: the board owner can invite any registered user by username; every member gets access via socket
-- **Delete a board** (owner only) — cascades cleanly to columns, cards, labels, memberships
-
-### Realtime plumbing
-
-- Socket.io **rooms per board** (`socket.join(boardId)`) so broadcasts stay scoped
-- Every client mutation is emitted with an `ack` so the caller knows whether the write stuck
-- Full board snapshot is re-sent on reconnect; per-mutation broadcasts carry just the affected resource (`board:cards`, `board:columns`, `board:labels`, `presence:update`)
-- Server is the source of truth for card order; clients apply the broadcast payload as-is
-
----
-
-## Repository layout
-
-```
-.
-├── client/            Vite + React frontend
-│   └── src/
-│       ├── pages/     Login, Register, BoardList, Board
-│       ├── components/ BoardView, ColumnView, CardView, CardModal, PresenceBar, RemoteCursors, BoardHeader
-│       ├── hooks/     useBoardSocket
-│       ├── store.ts   Zustand board state
-│       ├── authStore.ts
-│       └── api.ts     REST client
-├── server/
-│   ├── src/
-│   │   ├── index.ts   HTTP + Socket.io bootstrap
-│   │   ├── rest.ts    Express routes (auth, boards, members)
-│   │   ├── sockets.ts Socket.io event handlers
-│   │   ├── store.ts   Postgres data access (transactions for moves + board creation)
-│   │   ├── auth.ts    Register, login, JWT signing/verification, middleware
-│   │   ├── db.ts      pg Pool, tx helper, waitForDb
-│   │   ├── config.ts  Environment variables
-│   │   └── types.ts
-│   ├── db/init/       SQL schema loaded on first container start
-│   └── .env.example
-├── docker-compose.yml PostgreSQL service
-└── README.md
-```
+| Frontend | React 18, Vite, TypeScript, Zustand, `@dnd-kit`, React Router, `socket.io-client` |
+| Backend | Node.js 20+, Express 4, Socket.io 4, TypeScript (ESM), Zod for input validation |
+| Database | PostgreSQL 16 (via Docker Compose), `pg` driver, startup migrations |
+| Auth | JSON Web Tokens (7-day sessions, 30-day invite tokens), `bcryptjs` password hashing |
+| Tooling | `tsx watch` (server dev), Vite HMR (client), Docker Compose (database) |
 
 ---
 
 ## Getting started
 
-You need Node.js 20+ and Docker (or a local Postgres 16 instance).
-
-### 1. Start the database
+**Prerequisites.** Node.js 20 or newer, Docker (or a local PostgreSQL 16), and npm.
 
 ```bash
+# 1. Database
 docker compose up -d
-```
 
-This starts a `postgres:16-alpine` container on port `5432` with the following credentials (matching `server/.env.example`):
-
-```
-user:     kanban
-password: kanban
-database: kanban
-```
-
-The schema in `server/db/init/001_schema.sql` is executed automatically the first time the container starts.
-
-### 2. Start the API server
-
-```bash
+# 2. Server
 cd server
-cp .env.example .env    # then edit JWT_SECRET for anything non-dev
+cp .env.example .env      # optional: change JWT_SECRET for anything non-dev
 npm install
-npm run dev             # http://localhost:4000
+npm run dev               # http://localhost:4000
+
+# 3. Client
+cd ../client
+npm install
+npm run dev               # http://localhost:5173
 ```
 
-### 3. Start the frontend
+Open <http://localhost:5173>, create an account, create a board, then open the same URL in a second browser (or an incognito window with a second account) to see everything sync live.
 
-```bash
-cd client
-npm install
-npm run dev             # http://localhost:5173
-```
-
-Open [http://localhost:5173](http://localhost:5173), create an account, create a board, and then open the same board URL in a second browser (or an incognito window with a second account) to watch the live sync in action.
+Startup migrations run automatically the first time the server connects to a fresh database. Subsequent restarts are no-ops.
 
 ---
 
-## Environment variables
+## Environment
 
-**Server** (`server/.env`):
+### Server (`server/.env`)
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `4000` | HTTP + WebSocket port |
 | `CLIENT_ORIGIN` | `http://localhost:5173` | CORS + Socket.io allowed origin |
-| `DATABASE_URL` | `postgres://kanban:kanban@localhost:5432/kanban` | Postgres connection string |
-| `JWT_SECRET` | `dev-secret-change-me` | Signing key for JWTs. **Change this in production.** |
+| `DATABASE_URL` | `postgres://kanban:kanban@localhost:5432/kanban` | PostgreSQL connection string |
+| `JWT_SECRET` | `dev-secret-change-me` | Signing key for session and invite tokens. **Change in production.** |
 
-**Client** (`client/.env`):
+### Client (`client/.env`)
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VITE_API_URL` | `http://localhost:4000` | Base URL for both REST and WebSocket |
+| `VITE_API_URL` | `http://localhost:4000` | Base URL for REST and WebSocket |
 
 ---
 
-## Realtime architecture
+## Architecture
 
 ```
-Client A ──drag card──▶ socket.io-client ──emit('card:move')──▶ Server
-                                                                  │
-                                                                  ▼
-                                                     Postgres transaction
-                                                     (reorder both columns)
-                                                                  │
-                                                                  ▼
-                                    io.to(boardId).emit('board:cards', ...)
-                                                                  │
-                                                                  ▼
-                                            Every client in the room
-                                            replaces its cards[] state
+┌────────────┐        WebSocket (rooms)         ┌────────────┐
+│  Client A  │ ◄──────────────────────────────► │            │
+├────────────┤                                  │  Express   │
+│  Zustand   │        JWT-auth REST             │  + Socket  │◄──► PostgreSQL
+│  store     │ ◄──────────────────────────────► │  handlers  │
+└────────────┘                                  └────────────┘
+      ▲                                                ▲
+      │                                                │
+      │      board:cards / board:columns / …           │
+      └────────────────── broadcasts ──────────────────┘
 ```
 
-- **Rooms**: `socket.join(boardId)` scopes broadcasts to a single board
-- **Optimistic move**: the dragging client updates its Zustand `cards` locally *before* the server responds; the server broadcast then reconciles any race
-- **Server authority**: card order is computed server-side inside a Postgres transaction that `SELECT ... FOR UPDATE` locks the moving card; clients never override it
-- **Reconnect flow**: on `connect`, the client re-emits `board:join`; the ack returns a fresh `BoardSnapshot` that replaces local state wholesale
+**Optimistic updates.** Drag-and-drop applies the reorder locally the moment the drop lands, then reconciles once the server broadcast comes back. The server owns the canonical order.
+
+**Rooms.** Every board has its own Socket.io room (`socket.join(boardId)`). Broadcasts stay scoped: presence, cursors, mutations, member updates.
+
+**REST-then-broadcast.** Mutations that go through REST (board settings, member role changes, invite acceptance) push their result back into the socket room via a shared `realtime.ts` helper so every viewer sees the change without refreshing.
+
+**Reconnect.** On `connect`, the client re-emits `board:join` and replaces its local state with a fresh snapshot. A visible banner shows the reconnecting state; disconnect never leaves the UI in an inconsistent state.
+
+---
+
+## Feature reference
+
+### Boards, columns, cards
+- Create, rename, delete boards, columns, and cards
+- Drag cards inside a column or across columns
+- Drag columns to reorder them
+- Per-card color, description, labels, assignees, and link attachments
+- Card activity log records every mutation with the actor and timestamp
+- Cards are permalinkable via `?c=<cardId>` in the board URL
+
+### Labels
+- Default palette on board creation (`Bug`, `Feature`, `Urgent`, `Idea`)
+- Create, color-pick, and delete labels from the card modal
+- Filter cards by label; the filter collapses into a searchable dropdown past 10 labels
+
+### Members and roles
+- `owner` — full control, board deletion, visibility, member management
+- `member` — read + write on cards, columns, labels
+- `viewer` — read-only, banner shown, mutations rejected server-side
+- Owner-only Members panel in board settings: list, role dropdown, remove
+- Removed members receive a banner explaining they lost access
+
+### Sharing
+- Owner generates a signed invite link (30-day JWT), copies from a popover
+- `/join/:token` accepts the invite when the recipient signs in (auto-redirect after login)
+- Public boards additionally expose `/view/:token` — read-only, no account required
+
+### Personalization
+- `/settings` — display name, avatar color, default board background
+- Board settings — gradient, solid color, or uploaded PNG background; visibility toggle
+- Backgrounds are stored as raw CSS values (gradient, hex, or `url(data:image/png;base64,…)`), served with a `cover` fit
+
+### Search and filters
+- Dashboard: text search + all/owned/shared filter over board tiles
+- Board: text search across card titles and descriptions
+- Label pills (or dropdown past 10 labels) filter cards
+- Assignee avatars (or dropdown past 10 members) filter cards
+- `Clear` button resets every active filter at once
+
+### Presence and cursors
+- Colored avatar bar shows everyone currently on the board
+- Figma-style remote cursors driven by `requestAnimationFrame`-batched `cursor:move` events
+- Reconnect banner + graceful state re-sync
+
+---
+
+## Keyboard shortcuts
+
+Available anywhere on the board page while no input is focused.
+
+| Key | Action |
+| --- | --- |
+| <kbd>/</kbd> | Focus the card search bar |
+| <kbd>N</kbd> | Start adding a card in the first column |
+| <kbd>C</kbd> | Start adding a new column |
+| <kbd>?</kbd> | Show or hide the shortcuts overlay |
+| <kbd>Esc</kbd> | Close the overlay, the card modal, or an open popover |
+
+`Enter` submits every add form (new board, new column, new card, invite, label, link), title rename inline edits, and the profile form. The description textarea keeps native `Enter` behavior for newlines.
+
+---
+
+## REST API
+
+All endpoints live under `/api`. Auth-guarded routes require `Authorization: Bearer <jwt>`.
+
+### Auth
+- `POST /auth/register` — `{ email, username, password }` → `{ user, token }`
+- `POST /auth/login` — `{ identifier, password }` → `{ user, token }`
+- `GET  /auth/me` — the authenticated user
+- `PATCH /auth/me` — `{ displayName?, avatarColor?, background? }`
+
+### Boards
+- `GET    /boards` — boards the user is a member of
+- `POST   /boards` — `{ title }`; seeds three columns and four default labels
+- `GET    /boards/:id` — board metadata (403 if not a member)
+- `GET    /boards/:id/snapshot` — full board snapshot
+- `PATCH  /boards/:id` — `{ background?, visibility? }` (owner only)
+- `DELETE /boards/:id` — owner only; cascades to columns, cards, labels, memberships
+
+### Members
+- `PATCH  /boards/:id/members/:userId` — `{ role: 'member' | 'viewer' }` (owner only)
+- `DELETE /boards/:id/members/:userId` — owner only
+
+### Invites
+- `POST /boards/:id/invite-link` — owner only; returns `{ token, url }`
+- `POST /invites/accept` — `{ token }`; adds the caller as a member
+
+### Public
+- `GET /public/boards/:token/snapshot` — read-only snapshot when the board has `visibility=public`
+
+### Health
+- `GET /health` — `{ ok: true }`
 
 ---
 
@@ -170,84 +223,107 @@ Client A ──drag card──▶ socket.io-client ──emit('card:move')──
 
 | Event | Direction | Payload | Notes |
 | --- | --- | --- | --- |
-| `board:join` | client → server | `{ boardId }` | Ack: `{ snapshot, you } \| { error }`. Server checks membership. |
-| `card:move` | client → server | `{ cardId, toColumnId, toIndex }` | Runs in a transaction. |
-| `card:create` | client → server | `{ columnId, title }` | |
-| `card:update` | client → server | `{ cardId, title?, description? }` | |
-| `card:delete` | client → server | `{ cardId }` | |
-| `column:create` | client → server | `{ title }` | |
-| `column:delete` | client → server | `{ columnId }` | |
-| `label:create` | client → server | `{ name, color }` | |
-| `label:delete` | client → server | `{ labelId }` | |
+| `board:join` | client → server | `{ boardId }` | Ack: `{ snapshot, you, role } \| { error }` |
+| `board:refresh` | client → server | `{}` | Ack + broadcasts `board:meta` and `board:members` |
+| `card:move` | client → server | `{ cardId, toColumnId, toIndex }` | Runs inside a transaction |
+| `card:create` / `card:update` / `card:delete` | client → server | see rest.ts | Broadcasts `board:cards` + card activity |
+| `card:assignee:toggle` | client → server | `{ cardId, userId }` | Requires target to be a board member |
 | `card:label:toggle` | client → server | `{ cardId, labelId }` | |
-| `cursor:move` | client → server | `{ x, y }` | Rate-limited to `requestAnimationFrame` client-side. |
-| `board:cards` | server → room | `Card[]` | Broadcast after any card mutation. |
-| `board:columns` | server → room | `Column[]` | |
-| `board:labels` | server → room | `Label[]` | |
-| `presence:update` | server → room | `PresenceUser[]` | |
-| `cursor:update` | server → room | `{ socketId, x, y }` | |
-| `cursor:leave` | server → room | `{ socketId }` | |
+| `card:link:add` / `card:link:remove` | client → server | see sockets.ts | Broadcasts `board:cards` |
+| `card:events:list` | client → server | `{ cardId }` | Ack returns the activity log |
+| `column:create` / `column:update` / `column:move` / `column:delete` | client → server | see sockets.ts | Broadcasts `board:columns` |
+| `label:create` / `label:delete` | client → server | see sockets.ts | Broadcasts `board:labels` |
+| `cursor:move` | client → server | `{ x, y }` | Rate-limited to `requestAnimationFrame` |
+| `board:cards` | server → room | `Card[]` | After any card mutation |
+| `board:columns` | server → room | `Column[]` | After any column mutation |
+| `board:labels` | server → room | `Label[]` | After any label mutation |
+| `board:members` | server → room | `BoardMember[]` | After role change, kick, join, or invite acceptance |
+| `board:meta` | server → room | `Board` | After background / visibility change |
+| `card:events` | server → room | `{ cardId, events }` | After each card mutation |
+| `presence:update` | server → room | `PresenceUser[]` | On join or leave |
+| `cursor:update` / `cursor:leave` | server → room | `{ socketId, x, y }` / `{ socketId }` | |
 
----
-
-## REST endpoints
-
-All endpoints under `/api`. Auth-guarded routes require `Authorization: Bearer <jwt>`.
-
-### Auth (public)
-
-- `POST /auth/register` — `{ email, username, password }` → `{ user, token }`
-- `POST /auth/login` — `{ identifier, password }` (identifier = email or username) → `{ user, token }`
-- `GET  /auth/me` — returns the authenticated user
-
-### Boards (auth required)
-
-- `GET    /boards` — boards the user is a member of
-- `POST   /boards` — `{ title }` — also seeds three columns (`To Do`, `In Progress`, `Done`) and four default labels
-- `GET    /boards/:id` — board metadata (403 if not a member)
-- `GET    /boards/:id/snapshot` — full board state (columns, cards, labels, members)
-- `DELETE /boards/:id` — owner only; cascades to everything below
-- `POST   /boards/:id/members` — owner only; `{ username }` → adds a member
-
-### Health
-
-- `GET /health` — `{ ok: true }`
+Every REST mutation that affects a board pushes its result into the socket room via `server/src/realtime.ts`, so no viewer ever sees stale data without refreshing.
 
 ---
 
 ## Database schema
 
-Defined in `server/db/init/001_schema.sql`:
+Defined in `server/db/init/001_schema.sql` plus additive startup migrations in `server/src/db.ts`.
 
-- `users` — id, email (unique), username (unique), password_hash, created_at
-- `boards` — id, title, owner_id, created_at
-- `board_members` — board_id, user_id, role (`owner` | `member`), added_at
-- `columns` — id, board_id, title, order
-- `cards` — id, column_id, title, description, order, created_at
-- `labels` — id, board_id, name, color
-- `card_labels` — card_id, label_id (many-to-many)
+| Table | Notable columns |
+| --- | --- |
+| `users` | `email` (unique), `username` (unique), `password_hash`, `display_name`, `avatar_color`, `background` |
+| `boards` | `owner_id`, `background`, `visibility` (`private` \| `public`) |
+| `board_members` | `board_id`, `user_id`, `role` (`owner` \| `member` \| `viewer`) |
+| `columns` | `board_id`, `title`, `order` |
+| `cards` | `column_id`, `title`, `description`, `order`, `color` |
+| `card_labels` | `card_id`, `label_id` |
+| `card_assignees` | `card_id`, `user_id` |
+| `card_links` | `card_id`, `url`, `title`, `position` |
+| `card_events` | `card_id`, `board_id`, `user_id`, `kind`, `meta`, `created_at` |
+| `labels` | `board_id`, `name`, `color` |
+| `schema_migrations` | `name` (unique) — tracks applied startup migrations |
 
-All foreign keys `ON DELETE CASCADE` so deleting a board wipes its columns → cards → card_labels, plus its labels and memberships, in one shot.
+All foreign keys use `ON DELETE CASCADE` so removing a board wipes columns, cards, labels, memberships, activity events, and card links in one operation.
 
 ---
 
-## Multi-user demo
+## Repository layout
 
-1. Register two accounts (open a second browser or use an incognito window).
-2. Account A creates a board and copies the URL.
-3. Account A invites account B by username via the header **+ Invite** button.
-4. Account B navigates to the same board URL — both accounts now show up in the presence bar.
-5. Drag a card in one window and watch it move in the other; the remote cursor floats around as you mouse.
+```
+.
+├── client/
+│   └── src/
+│       ├── pages/          Login, Register, Join, View, BoardList, Board, Settings
+│       ├── components/     BoardView, ColumnView, CardView, CardModal,
+│       │                   BoardHeader, BoardSettings, PresenceBar,
+│       │                   RemoteCursors, ShortcutsOverlay,
+│       │                   LabelFilterDropdown, MemberFilterDropdown
+│       ├── hooks/          useBoardSocket
+│       ├── utils/          boardColor, autolink
+│       ├── store.ts        Zustand board state
+│       ├── authStore.ts    JWT + user store
+│       ├── api.ts          REST client with typed helpers
+│       └── socket.ts       Socket.io client factory (WebSocket only)
+├── server/
+│   ├── src/
+│   │   ├── index.ts        HTTP + Socket.io bootstrap
+│   │   ├── rest.ts         Express routes
+│   │   ├── sockets.ts      Socket.io handlers
+│   │   ├── store.ts        Postgres data access (transactional moves)
+│   │   ├── auth.ts         Register, login, JWT helpers, invite tokens
+│   │   ├── realtime.ts     Shared io reference used by REST for broadcasts
+│   │   ├── db.ts           pg Pool, startup migrations, tx helper
+│   │   ├── config.ts       Environment variables
+│   │   └── types.ts
+│   ├── db/init/            SQL executed on first container start
+│   └── .env.example
+├── docker-compose.yml      PostgreSQL 16 service
+└── README.md
+```
+
+---
+
+## Development workflow
+
+- **Branch per feature.** History is organized into `feat/*` branches: `feat/postgres-auth`, `feat/card-features`, `feat/user-settings`, `feat/board-settings`, `feat/search-filters`, `feat/card-color-board-image`, `feat/card-links`, `feat/team-roles`, `feat/ui-polish-links-upload`, `feat/keyboard-shortcuts`.
+- **Commit style.** Conventional Commits, imperative subject, terse body explaining the *why* when it isn't obvious.
+- **Type-safety end to end.** `types.ts` is duplicated between server and client so REST payloads and socket events stay strongly typed on both sides.
+- **Migrations.** Additive only, name-keyed, tracked in `schema_migrations`. To ship a schema change, append to the `MIGRATIONS` array in `server/src/db.ts` with a new unique name.
 
 ---
 
 ## Roadmap
 
-- Undo / redo synced across clients
-- Card activity log (who moved what, when)
-- Reorderable columns via drag & drop
+- Undo / redo synchronized across clients
+- Reorderable card link list via drag-and-drop
+- Email-based invites for recipients without an account
 - Deployment: Vercel (frontend) + Railway or Fly.io (backend — WebSockets need a persistent process, not serverless)
-- Email invites for users who don't have an account yet
+- Storage-backed image uploads (S3 or similar) instead of inline data URLs
+- Card comments and mentions
+
+---
 
 ## License
 
