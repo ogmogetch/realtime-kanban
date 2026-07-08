@@ -40,7 +40,7 @@ export default function BoardSettings() {
 
   const visibility = (board as { visibility?: string }).visibility ?? 'private';
 
-  async function updateBoard(patch: { background?: string | null; visibility?: 'private' | 'link' }) {
+  async function updateBoard(patch: { background?: string | null; visibility?: 'private' | 'public' }) {
     if (!board) return;
     setBusy(true);
     setErr(null);
@@ -135,17 +135,17 @@ export default function BoardSettings() {
                 🔒 Private
               </button>
               <button
-                className={visibility === 'link' ? 'active' : ''}
-                onClick={() => updateBoard({ visibility: 'link' })}
+                className={visibility === 'public' ? 'active' : ''}
+                onClick={() => updateBoard({ visibility: 'public' })}
                 disabled={busy}
               >
-                🔗 Anyone with link
+                🌐 Public
               </button>
             </div>
             <div className="muted small" style={{ marginTop: 4 }}>
-              {visibility === 'link'
-                ? 'Anyone with the invite link can view the board (read-only unless they join).'
-                : 'Only board members can view or edit.'}
+              {visibility === 'public'
+                ? 'Anyone with the link can view the board. Editing still requires being a member.'
+                : 'Only board members can view or edit. Sign-in required.'}
             </div>
           </div>
           {err && <div className="form-error small">{err}</div>}

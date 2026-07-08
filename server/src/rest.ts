@@ -123,7 +123,7 @@ rest.get('/boards/:id/snapshot', requireAuth, async (req: AuthenticatedRequest, 
 
 const boardPatchSchema = z.object({
   background: z.string().max(200).nullable().optional(),
-  visibility: z.enum(['private', 'link']).optional(),
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 rest.patch('/boards/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -182,7 +182,8 @@ rest.get('/public/boards/:token/snapshot', async (req, res) => {
     `SELECT visibility FROM boards WHERE id = $1`,
     [board.id]
   );
-  if (rows[0]?.visibility !== 'link') {
+  const vis = rows[0]?.visibility;
+  if (vis !== 'public' && vis !== 'link') {
     return res.status(403).json({ error: 'board is private' });
   }
   const snap = await getSnapshot(board.id);

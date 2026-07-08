@@ -3,6 +3,7 @@ import { pool, query, tx } from './db.js';
 import type {
   Board,
   Card,
+  CardLink,
   Column,
   BoardSnapshot,
   Label,
@@ -27,7 +28,7 @@ function boardRowToBoard(r: { id: string; title: string; owner_id: string; creat
     ownerId: r.owner_id,
     createdAt: r.created_at.toISOString(),
     background: r.background,
-    visibility: r.visibility === 'link' ? 'link' : 'private',
+    visibility: (r.visibility === 'public' || r.visibility === 'link') ? 'public' : 'private',
   };
 }
 
@@ -127,7 +128,7 @@ export async function getSnapshot(boardId: string): Promise<BoardSnapshot | null
   const board = await getBoard(boardId);
   if (!board) return null;
 
-  const [colRes, cardRes, labelRes, memRes, cardLabelRes, cardAssigneeRes] = await Promise.all([
+  const [colRes, cardRes, labelRes, memRes, cardLabelRes, cardAssigneeRes, cardLinkRes] = await Promise.all([
     query<{ id: string; board_id: string; title: string; order: number }>(
       `SELECT * FROM columns WHERE board_id = $1 ORDER BY "order" ASC`,
       [boardId]
@@ -165,6 +166,15 @@ export async function getSnapshot(boardId: string): Promise<BoardSnapshot | null
        WHERE col.board_id = $1`,
       [boardId]
     ),
+    query<{ card_id: string; id: string; url: string; title: string }>(
+      `SELECT cl.card_id, cl.id, cl.url, cl.title
+       FROM card_links cl
+       JOIN cards c ON c.id = cl.card_id
+       JOIN columns col ON col.id = c.column_id
+       WHERE col.board_id = $1
+       ORDER BY cl.position ASC`,
+      [boardId]
+    ),
   ]);
 
   const labelsByCard = new Map<string, string[]>();
@@ -179,6 +189,12 @@ export async function getSnapshot(boardId: string): Promise<BoardSnapshot | null
     list.push(r.user_id);
     assigneesByCard.set(r.card_id, list);
   }
+  const linksByCard = new Map<string, CardLink[]>();
+  for (const r of cardLinkRes.rows) {
+    const list = linksByCard.get(r.card_id) ?? [];
+    list.push({ id: r.id, url: r.url, title: r.title });
+    linksByCard.set(r.card_id, list);
+  }
 
   const cards: Card[] = cardRes.rows.map((r) => ({
     id: r.id,
@@ -189,6 +205,7 @@ export async function getSnapshot(boardId: string): Promise<BoardSnapshot | null
     color: r.color,
     labelIds: labelsByCard.get(r.id) ?? [],
     assigneeIds: assigneesByCard.get(r.id) ?? [],
+    links: linksByCard.get(r.id) ?? [],
   }));
 
   const columns: Column[] = colRes.rows.map((r) => ({
@@ -286,9 +303,13 @@ async function fetchCard(cardId: string): Promise<Card | null> {
   );
   const r = rows[0];
   if (!r) return null;
-  const [labels, assignees] = await Promise.all([
+  const [labels, assignees, links] = await Promise.all([
     query<{ label_id: string }>(`SELECT label_id FROM card_labels WHERE card_id = $1`, [cardId]),
     query<{ user_id: string }>(`SELECT user_id FROM card_assignees WHERE card_id = $1`, [cardId]),
+    query<{ id: string; url: string; title: string }>(
+      `SELECT id, url, title FROM card_links WHERE card_id = $1 ORDER BY position ASC`,
+      [cardId]
+    ),
   ]);
   return {
     id: r.id,
@@ -299,6 +320,7 @@ async function fetchCard(cardId: string): Promise<Card | null> {
     color: r.color,
     labelIds: labels.rows.map((x) => x.label_id),
     assigneeIds: assignees.rows.map((x) => x.user_id),
+    links: links.rows,
   };
 }
 
@@ -315,7 +337,44 @@ export async function createCard(columnId: string, title: string): Promise<Card 
     `INSERT INTO cards (id, column_id, title, "order") VALUES ($1, $2, $3, $4)`,
     [id, columnId, title, order]
   );
-  return { id, columnId, title, description: '', order, color: null, labelIds: [], assigneeIds: [] };
+  return { id, columnId, title, description: '', order, color: null, labelIds: [], assigneeIds: [], links: [] };
+}
+
+export async function addCardLink(cardId: string, url: string, title: string): Promise<{ boardId: string; link: CardLink } | null> {
+  const boardCard = await query<{ board_id: string }>(
+    `SELECT col.board_id FROM cards c JOIN columns col ON col.id = c.column_id WHERE c.id = $1`,
+    [cardId]
+  );
+  const boardId = boardCard.rows[0]?.board_id;
+  if (!boardId) return null;
+  const posRes = await query<{ next: number }>(
+    `SELECT COALESCE(MAX(position), -1) + 1 AS next FROM card_links WHERE card_id = $1`,
+    [cardId]
+  );
+  const position = posRes.rows[0].next;
+  const id = nanoid(10);
+  await query(
+    `INSERT INTO card_links (id, card_id, url, title, position) VALUES ($1, $2, $3, $4, $5)`,
+    [id, cardId, url, title, position]
+  );
+  return { boardId, link: { id, url, title } };
+}
+
+export async function deleteCardLink(linkId: string): Promise<{ boardId: string; cardId: string; url: string } | null> {
+  const { rows } = await query<{ card_id: string; url: string }>(
+    `SELECT card_id, url FROM card_links WHERE id = $1`,
+    [linkId]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const boardRes = await query<{ board_id: string }>(
+    `SELECT col.board_id FROM cards c JOIN columns col ON col.id = c.column_id WHERE c.id = $1`,
+    [r.card_id]
+  );
+  const boardId = boardRes.rows[0]?.board_id;
+  if (!boardId) return null;
+  await query(`DELETE FROM card_links WHERE id = $1`, [linkId]);
+  return { boardId, cardId: r.card_id, url: r.url };
 }
 
 export async function deleteCard(cardId: string): Promise<boolean> {

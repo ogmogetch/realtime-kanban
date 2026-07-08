@@ -88,6 +88,26 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE cards ADD COLUMN IF NOT EXISTS color TEXT;
     `,
   },
+  {
+    name: '007_card_links',
+    sql: `
+      CREATE TABLE IF NOT EXISTS card_links (
+        id         TEXT PRIMARY KEY,
+        card_id    TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+        url        TEXT NOT NULL,
+        title      TEXT NOT NULL DEFAULT '',
+        position   INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_card_links_card ON card_links(card_id, position);
+    `,
+  },
+  {
+    name: '008_visibility_public',
+    sql: `
+      UPDATE boards SET visibility = 'public' WHERE visibility = 'link';
+    `,
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

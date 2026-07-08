@@ -31,7 +31,7 @@ export interface ProfilePatch {
 
 export interface BoardPatch {
   background?: string | null;
-  visibility?: 'private' | 'link';
+  visibility?: 'private' | 'public';
 }
 
 export const api = {

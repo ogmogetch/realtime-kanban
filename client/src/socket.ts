@@ -18,6 +18,9 @@ export function getSocket(): Socket {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 500,
     reconnectionDelayMax: 4000,
+    transports: ['websocket'],
+    upgrade: false,
+    timeout: 20000,
     auth: { token },
   });
   return socket;
