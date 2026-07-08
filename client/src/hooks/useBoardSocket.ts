@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { getSocket } from '../socket.js';
 import { useBoardStore } from '../store.js';
 import { useAuthStore } from '../authStore.js';
-import type { Board, BoardSnapshot, CardEvent, Column, Card, Label, PresenceUser } from '../types.js';
+import type { Board, BoardMember, BoardSnapshot, CardEvent, Column, Card, Label, PresenceUser } from '../types.js';
 
 export function useBoardSocket(boardId: string | null) {
   const token = useAuthStore((s) => s.token);
@@ -19,6 +19,8 @@ export function useBoardSocket(boardId: string | null) {
   const setBoardError = useBoardStore((s) => s.setBoardError);
   const setBoardMeta = useBoardStore((s) => s.setBoardMeta);
   const setCardEvents = useBoardStore((s) => s.setCardEvents);
+  const setMyRole = useBoardStore((s) => s.setMyRole);
+  const setMembers = useBoardStore((s) => s.setMembers);
 
   useEffect(() => {
     if (!boardId || !token) return;
@@ -28,7 +30,7 @@ export function useBoardSocket(boardId: string | null) {
       socket.emit(
         'board:join',
         { boardId },
-        (res: { snapshot?: BoardSnapshot; you?: PresenceUser; error?: string }) => {
+        (res: { snapshot?: BoardSnapshot; you?: PresenceUser; role?: 'owner' | 'member' | 'viewer'; error?: string }) => {
           if (res?.error) {
             setBoardError(res.error);
             useBoardStore.setState({ board: null, columns: [], cards: [], labels: [], members: [], presence: [], cursors: {} });
@@ -36,6 +38,7 @@ export function useBoardSocket(boardId: string | null) {
           }
           if (res.snapshot) setSnapshot(res.snapshot);
           if (res.you) setMe(res.you);
+          if (res.role) setMyRole(res.role);
         }
       );
     };
@@ -56,6 +59,7 @@ export function useBoardSocket(boardId: string | null) {
     const onCursorUpdate = (payload: { socketId: string; x: number; y: number }) => setCursor(payload);
     const onCursorLeave = ({ socketId }: { socketId: string }) => removeCursor(socketId);
     const onBoardMeta = (board: Board) => setBoardMeta(board);
+    const onMembers = (members: BoardMember[]) => setMembers(members);
     const onCardEvents = ({ cardId, events }: { cardId: string; events: CardEvent[] }) => setCardEvents(cardId, events);
     const onConnectError = (err: Error) => {
       setBoardError(err.message || 'connection failed');
@@ -71,6 +75,7 @@ export function useBoardSocket(boardId: string | null) {
     socket.on('cursor:update', onCursorUpdate);
     socket.on('cursor:leave', onCursorLeave);
     socket.on('board:meta', onBoardMeta);
+    socket.on('board:members', onMembers);
     socket.on('card:events', onCardEvents);
 
     if (socket.connected) onConnect();
@@ -86,7 +91,8 @@ export function useBoardSocket(boardId: string | null) {
       socket.off('cursor:update', onCursorUpdate);
       socket.off('cursor:leave', onCursorLeave);
       socket.off('board:meta', onBoardMeta);
+      socket.off('board:members', onMembers);
       socket.off('card:events', onCardEvents);
     };
-  }, [boardId, token, setSnapshot, setColumns, setCards, setLabels, setPresence, setCursor, removeCursor, setMe, setConnected, setReconnecting, setBoardError, setBoardMeta, setCardEvents]);
+  }, [boardId, token, setSnapshot, setColumns, setCards, setLabels, setPresence, setCursor, removeCursor, setMe, setConnected, setReconnecting, setBoardError, setBoardMeta, setCardEvents, setMyRole, setMembers]);
 }

@@ -134,10 +134,9 @@ button.small {
 
 /* ---------- Inputs ---------- */
 
-input[type="text"],
-input[type="email"],
-input[type="password"],
-textarea {
+input:not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea,
+select {
   background: var(--bg-1);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -145,12 +144,16 @@ textarea {
   outline: none;
   width: 100%;
   color: var(--text);
+  font: inherit;
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  -webkit-appearance: none;
+  appearance: none;
 }
-input:focus, textarea:focus {
+input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
   box-shadow: var(--shadow-glow);
 }
+input::placeholder, textarea::placeholder { color: var(--muted); }
 textarea { resize: vertical; font-family: inherit; }
 
 label {
@@ -881,6 +884,87 @@ label input, label textarea { text-transform: none; letter-spacing: 0; font-weig
   border-top: 1px solid var(--border);
 }
 
+/* ---------- Card link list (modal) ---------- */
+
+.link-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.link-add input { background: var(--bg-1); }
+.link-add button { white-space: nowrap; }
+
+.link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.link-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.link-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: var(--r-md);
+  color: var(--text);
+  text-decoration: none;
+  transition: background var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+  overflow: hidden;
+}
+.link-item:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.55);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+.link-item-icon {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  background: rgba(99, 102, 241, 0.25);
+  display: grid; place-items: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.link-item-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.link-item-title {
+  color: var(--text-strong);
+  font-weight: 500;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.link-item-url {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.link-item-arrow {
+  color: var(--muted);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.link-item:hover .link-item-arrow { color: var(--text); }
+.link-remove {
+  align-self: stretch;
+  padding: 0 10px;
+}
+
 /* ---------- Autolink + card link chips ---------- */
 
 .autolink {
@@ -1085,6 +1169,34 @@ label input, label textarea { text-transform: none; letter-spacing: 0; font-weig
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #fff;
   border-color: transparent;
+}
+
+/* ---------- Member list ---------- */
+
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.member-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.member-list-row .avatar.small { margin-left: 0; }
+.member-list-name { flex: 1; }
+.member-list-name > div:first-child { font-weight: 500; }
+.member-list-row select {
+  background: var(--bg-1);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+  font-size: 12px;
 }
 
 /* ---------- Read-only badge ---------- */

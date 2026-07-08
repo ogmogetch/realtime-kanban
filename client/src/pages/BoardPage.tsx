@@ -16,6 +16,7 @@ export default function BoardPage() {
   const reconnecting = useBoardStore((s) => s.reconnecting);
   const boardError = useBoardStore((s) => s.boardError);
   const reset = useBoardStore((s) => s.reset);
+  const myRole = useBoardStore((s) => s.myRole);
   const user = useAuthStore((s) => s.user);
 
   useBoardSocket(boardId ?? null);
@@ -47,7 +48,10 @@ export default function BoardPage() {
           {boardError} — <Link to="/">back to boards</Link>
         </div>
       )}
-      {board && <BoardView />}
+      {myRole === 'viewer' && (
+        <div className="readonly-banner">You have read-only access to this board.</div>
+      )}
+      {board && <BoardView readOnly={myRole === 'viewer'} />}
       <RemoteCursors />
     </div>
   );

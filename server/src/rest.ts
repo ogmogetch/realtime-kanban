@@ -20,6 +20,8 @@ import {
   deleteBoard,
   joinBoardViaInvite,
   updateBoardBackground,
+  setMemberRole,
+  removeMember,
 } from './store.js';
 import { query } from './db.js';
 import { config } from './config.js';
@@ -122,7 +124,7 @@ rest.get('/boards/:id/snapshot', requireAuth, async (req: AuthenticatedRequest, 
 });
 
 const boardPatchSchema = z.object({
-  background: z.string().max(200).nullable().optional(),
+  background: z.string().max(5_000_000).nullable().optional(),
   visibility: z.enum(['private', 'public']).optional(),
 });
 
@@ -140,6 +142,22 @@ rest.patch('/boards/:id', requireAuth, async (req: AuthenticatedRequest, res: Re
   }
   const updated = await getBoard(board.id);
   res.json(updated);
+});
+
+const roleSchema = z.object({ role: z.enum(['member', 'viewer']) });
+
+rest.patch('/boards/:id/members/:userId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = roleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid input' });
+  const member = await setMemberRole(req.params.id, req.auth!.userId, req.params.userId, parsed.data.role);
+  if (!member) return res.status(403).json({ error: 'owner only or member not found' });
+  res.json(member);
+});
+
+rest.delete('/boards/:id/members/:userId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const ok = await removeMember(req.params.id, req.auth!.userId, req.params.userId);
+  if (!ok) return res.status(403).json({ error: 'owner only or member not found' });
+  res.json({ ok: true });
 });
 
 rest.delete('/boards/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {

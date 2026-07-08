@@ -57,6 +57,14 @@ export const api = {
   updateBoard: (id: string, patch: BoardPatch) =>
     req<Board>(`/api/boards/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
+  setMemberRole: (boardId: string, userId: string, role: 'member' | 'viewer') =>
+    req<{ userId: string; username: string; role: string }>(`/api/boards/${boardId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+  removeMember: (boardId: string, userId: string) =>
+    req<{ ok: true }>(`/api/boards/${boardId}/members/${userId}`, { method: 'DELETE' }),
+
   createInviteLink: (boardId: string) =>
     req<{ token: string; url: string }>(`/api/boards/${boardId}/invite-link`, { method: 'POST' }),
   acceptInvite: (token: string) =>
