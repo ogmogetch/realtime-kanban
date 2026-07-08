@@ -21,6 +21,7 @@ import CardView from './CardView.js';
 import CardModal from './CardModal.js';
 import ShortcutsOverlay from './ShortcutsOverlay.js';
 import LabelFilterDropdown from './LabelFilterDropdown.js';
+import MemberFilterDropdown from './MemberFilterDropdown.js';
 import type { Card, Column } from '../types.js';
 
 export default function BoardView({ readOnly = false }: { readOnly?: boolean }) {
@@ -243,19 +244,28 @@ export default function BoardView({ readOnly = false }: { readOnly?: boolean }) 
         {members.length > 0 && (
           <>
             <span className="muted small" style={{ marginLeft: 8 }}>Assignee:</span>
-            <div className="filter-avatars">
-              {members.map((m) => (
-                <span
-                  key={m.userId}
-                  className={`avatar small ${assigneeFilter.has(m.userId) ? 'active' : ''}`}
-                  style={{ background: m.avatarColor }}
-                  title={m.displayName || m.username}
-                  onClick={() => setAssigneeFilter((p) => toggleSet(p, m.userId))}
-                >
-                  {(m.displayName || m.username).slice(0, 2).toUpperCase()}
-                </span>
-              ))}
-            </div>
+            {members.length > 10 ? (
+              <MemberFilterDropdown
+                members={members}
+                active={assigneeFilter}
+                onToggle={(id) => setAssigneeFilter((p) => toggleSet(p, id))}
+                onClear={() => setAssigneeFilter(new Set())}
+              />
+            ) : (
+              <div className="filter-avatars">
+                {members.map((m) => (
+                  <span
+                    key={m.userId}
+                    className={`avatar small ${assigneeFilter.has(m.userId) ? 'active' : ''}`}
+                    style={{ background: m.avatarColor }}
+                    title={m.displayName || m.username}
+                    onClick={() => setAssigneeFilter((p) => toggleSet(p, m.userId))}
+                  >
+                    {(m.displayName || m.username).slice(0, 2).toUpperCase()}
+                  </span>
+                ))}
+              </div>
+            )}
           </>
         )}
         {filterActive && (

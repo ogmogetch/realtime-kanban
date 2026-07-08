@@ -1392,28 +1392,24 @@ kbd {
 /* assignee filter avatars */
 .filter-bar .filter-avatars {
   display: flex;
-  gap: 2px;
-  padding-left: 6px;
+  gap: 3px;
+  flex-wrap: wrap;
 }
 .filter-bar .filter-avatars .avatar {
   cursor: pointer;
-  opacity: 0.4;
+  opacity: 0.5;
   filter: grayscale(0.6);
-  margin-left: -6px;
-  transition: transform var(--t-fast), opacity var(--t-fast), filter var(--t-fast), box-shadow var(--t-fast);
+  margin-left: 0;
+  transition: opacity var(--t-fast), filter var(--t-fast), box-shadow var(--t-fast);
 }
 .filter-bar .filter-avatars .avatar:hover {
-  opacity: 0.85;
+  opacity: 0.9;
   filter: grayscale(0);
-  transform: translateY(-2px) scale(1.08);
-  z-index: 2;
 }
 .filter-bar .filter-avatars .avatar.active {
   opacity: 1;
   filter: grayscale(0);
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent);
-  transform: translateY(-2px) scale(1.08);
-  z-index: 2;
+  box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px var(--accent);
 }
 
 /* ---------- Settings page ---------- */
