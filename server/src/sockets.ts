@@ -13,6 +13,8 @@ import {
   deleteLabel,
   toggleCardLabel,
   toggleCardAssignee,
+  addCardLink,
+  deleteCardLink,
   boardIdForColumn,
   boardIdForCard,
   isBoardMember,
@@ -173,6 +175,34 @@ export function registerSocketHandlers(io: Server) {
       const snap = await getSnapshot(boardId);
       io.to(boardId).emit('board:cards', snap?.cards ?? []);
       ack?.({ ok: true, card });
+    });
+
+    socket.on('card:link:add', async ({ cardId, url, title }: { cardId: string; url: string; title?: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      if ((await boardIdForCard(cardId)) !== boardId) return ack?.({ error: 'forbidden' });
+      const u = (url ?? '').trim().slice(0, 500);
+      if (!/^https?:\/\//i.test(u)) return ack?.({ error: 'url must start with http(s)://' });
+      const t = (title ?? '').trim().slice(0, 120);
+      const result = await addCardLink(cardId, u, t);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'failed' });
+      await logCardEvent(cardId, boardId, socket.data.userId, 'card.link_added', { url: u, title: t });
+      await broadcastEvents(io, boardId, cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true, link: result.link });
+    });
+
+    socket.on('card:link:remove', async ({ linkId }: { linkId: string }, ack?: Function) => {
+      const boardId = socket.data.boardId;
+      if (!boardId) return ack?.({ error: 'not in board' });
+      const result = await deleteCardLink(linkId);
+      if (!result || result.boardId !== boardId) return ack?.({ error: 'forbidden' });
+      await logCardEvent(result.cardId, boardId, socket.data.userId, 'card.link_removed', { url: result.url });
+      await broadcastEvents(io, boardId, result.cardId);
+      const snap = await getSnapshot(boardId);
+      io.to(boardId).emit('board:cards', snap?.cards ?? []);
+      ack?.({ ok: true });
     });
 
     socket.on('card:events:list', async ({ cardId }: { cardId: string }, ack?: Function) => {

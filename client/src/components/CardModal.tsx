@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useBoardStore } from '../store.js';
 import { getSocket } from '../socket.js';
-import { autolink, extractUrls, prettyUrl } from '../utils/autolink.js';
+import { autolink, prettyUrl } from '../utils/autolink.js';
 import type { CardEvent } from '../types.js';
 
 interface Props {
@@ -55,6 +55,9 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState(NEW_LABEL_COLORS[0]);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkTitle, setLinkTitle] = useState('');
+  const [linkErr, setLinkErr] = useState<string | null>(null);
   const CARD_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
 
   useEffect(() => {
@@ -109,6 +112,26 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
 
   function setColor(color: string | null) {
     getSocket().emit('card:update', { cardId: card!.id, color }, () => {});
+  }
+
+  function addLink() {
+    const url = linkUrl.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      setLinkErr('URL must start with http:// or https://');
+      return;
+    }
+    setLinkErr(null);
+    getSocket().emit('card:link:add', { cardId: card!.id, url, title: linkTitle.trim() }, (res: { error?: string }) => {
+      if (res?.error) setLinkErr(res.error);
+      else {
+        setLinkUrl('');
+        setLinkTitle('');
+      }
+    });
+  }
+
+  function removeLink(linkId: string) {
+    getSocket().emit('card:link:remove', { linkId }, () => {});
   }
 
   function remove() {
@@ -281,6 +304,44 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
         </div>
 
         <div className="modal-section">
+          <div className="modal-section-title">Links</div>
+          {card.links.length === 0 && readOnly && <div className="muted small">No links.</div>}
+          <div className="link-list">
+            {card.links.map((l) => (
+              <div key={l.id} className="link-row">
+                <a href={l.url} target="_blank" rel="noopener noreferrer" className="link-chip" title={l.url}>
+                  <span className="link-chip-icon">🔗</span>
+                  {l.title || prettyUrl(l.url)}
+                </a>
+                {!readOnly && (
+                  <button className="icon" onClick={() => removeLink(l.id)} title="Remove link">×</button>
+                )}
+              </div>
+            ))}
+          </div>
+          {!readOnly && (
+            <div className="link-add">
+              <input
+                type="text"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                placeholder="Title (optional)"
+                maxLength={120}
+              />
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://…"
+                onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }}
+              />
+              <button className="primary small" onClick={addLink} disabled={!linkUrl.trim()}>Add</button>
+            </div>
+          )}
+          {linkErr && <div className="form-error small">{linkErr}</div>}
+        </div>
+
+        <div className="modal-section">
           <div className="modal-section-title">Description</div>
           {readOnly ? (
             <div className="modal-desc rendered" style={{ padding: '10px 12px', whiteSpace: 'pre-wrap' }}>
@@ -296,20 +357,6 @@ export default function CardModal({ cardId, onClose, readOnly }: Props) {
               rows={5}
             />
           )}
-          {(() => {
-            const urls = extractUrls(readOnly ? card.description : desc);
-            if (urls.length === 0) return null;
-            return (
-              <div className="link-chips">
-                {urls.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="link-chip" title={url}>
-                    <span className="link-chip-icon">🔗</span>
-                    {prettyUrl(url)}
-                  </a>
-                ))}
-              </div>
-            );
-          })()}
         </div>
 
         {!readOnly && (

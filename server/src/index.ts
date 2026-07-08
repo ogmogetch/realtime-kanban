@@ -21,6 +21,9 @@ async function main() {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: { origin: config.clientOrigin, methods: ['GET', 'POST'] },
+    transports: ['websocket'],
+    pingInterval: 25000,
+    pingTimeout: 30000,
   });
   registerSocketHandlers(io);
 

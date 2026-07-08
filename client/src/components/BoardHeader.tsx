@@ -23,7 +23,7 @@ export default function BoardHeader() {
     setErr(null);
     try {
       const { token, url } = await api.createInviteLink(board.id);
-      const finalUrl = board.visibility === 'link'
+      const finalUrl = board.visibility === 'public'
         ? `${window.location.origin}/view/${token}`
         : url;
       setLink(finalUrl);
@@ -69,7 +69,7 @@ export default function BoardHeader() {
           {showInvite && (
             <div className="invite-popover">
               <div className="muted small">
-                {board.visibility === 'link'
+                {board.visibility === 'public'
                   ? 'Anyone with this link can view the board (read-only unless they join).'
                   : 'Anyone with this link can join the board as a member.'}
               </div>

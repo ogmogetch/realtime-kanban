@@ -7,6 +7,12 @@ export interface User {
   background: string | null;
 }
 
+export interface CardLink {
+  id: string;
+  url: string;
+  title: string;
+}
+
 export interface Card {
   id: string;
   columnId: string;
@@ -16,6 +22,7 @@ export interface Card {
   color: string | null;
   labelIds: string[];
   assigneeIds: string[];
+  links: CardLink[];
 }
 
 export interface Column {
@@ -31,7 +38,7 @@ export interface Board {
   ownerId: string;
   createdAt: string;
   background: string | null;
-  visibility: 'private' | 'link';
+  visibility: 'private' | 'public';
 }
 
 export interface Label {
